@@ -5,6 +5,8 @@ This integration allows for the Synchronization, Enrollment, and Revocation of c
 ## Requirements
 
 This integration is tested and confirmed as working for Anygateway REST 24.4 and above. Notice: Keyfactor Anygateway REST 24.4 requires the use of .Net 8.
+## Gateway Registration
+Download the **PCA root certificate** from AWS and have it ready to import into the Gateway **in `.pem` format**.
 
 ## Authentication (Access Key + Secret)
 
@@ -19,7 +21,7 @@ Before configuring the CAPlugin, have the following prepared:
 - **Access Key ID** (example format: `AKIAIOSFODNN7EXAMPLE`)
 - **Secret Access Key** (example format: `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`)
 
-#### 2) A target IAM Role the connector will run as (recommended)
+#### 2) A target IAM Role the Gateway will run as (recommended)
 Example:
 - `arn:aws:iam::123456789012:role/Keyfactor-AnyGateway-AcmPcaRole`
 
