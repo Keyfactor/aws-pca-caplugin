@@ -1,12 +1,94 @@
 {
-  "$schema": "https://keyfactor.github.io/integration-manifest-schema.json",
-  "integration_type": "ca-gateway",
-  "name": "<Gateway Name Here>",
-  "status": "prototype",
-  "support_level": "community",
-  "link_github": false,
-  "update_catalog": false,
-  "description": "<Description Here>",
-  "gateway_framework": "10.x.x",
-   "release_dir": "UPDATE-THIS-WITH-PATH-TO-BINARY-BUILD-FOLDER"
+    "$schema": "https://keyfactor.github.io/integration-manifest-schema.json",
+    "integration_type": "anyca-plugin",
+    "name": "AWSPCA CAPlugin REST Gateway Plugin",
+    "status": "pilot",
+    "support_level": "kf-supported",
+    "link_github": true,
+    "update_catalog": true,
+    "description": "AWSPCA CAPlugin for the AnyCA REST Gateway framework",
+    "gateway_framework": "25.4.0",
+    "release_project": "aws-pca-caplugin/AWSPCACAPlugin.csproj",
+    "release_dir": "aws-pca-caplugin/bin/Release",
+    "about": {
+        "carest": {
+            "ca_plugin_config": [
+                {
+                    "name": "RoleArn",
+                    "description": "Destination Role ARN to use for AWS auth. Supports the [profile] prefix when using Default SDK auth, e.g. [myprofile]arn:aws:iam::123456789012:role/MyRole."
+                },
+                {
+                    "name": "Region",
+                    "description": "AWS Region (single region only, e.g. us-east-1)."
+                },
+                {
+                    "name": "CAArn",
+                    "description": "AWS ACM PCA Certificate Authority ARN. Example: arn:aws:acm-pca:us-east-1:123456789012:certificate-authority/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                },
+                {
+                    "name": "S3Bucket",
+                    "description": "S3 bucket name used for PCA audit reports (inventory). The AWS identity in the Role context must have read/write permissions to this bucket."
+                },
+                {
+                    "name": "UseDefaultSdkAuth",
+                    "description": "Use AWS SDK default credential inference (supports EC2 instance role, environment variables, shared credentials, etc.). If RoleArn is prefixed with [profile], that profile is prioritized."
+                },
+                {
+                    "name": "DefaultSdkAssumeRole",
+                    "description": "If UseDefaultSdkAuth is true, setting this to true will perform AssumeRole into RoleArn using the inferred SDK credentials."
+                },
+                {
+                    "name": "UseOAuth",
+                    "description": "Use OAuth OIDC authentication to obtain a token, then AssumeRole into RoleArn."
+                },
+                {
+                    "name": "OAuthScope",
+                    "description": "OAuth scope to request."
+                },
+                {
+                    "name": "OAuthGrantType",
+                    "description": "OAuth grant type to request (commonly client_credentials)."
+                },
+                {
+                    "name": "OAuthUrl",
+                    "description": "OAuth token endpoint URL."
+                },
+                {
+                    "name": "OAuthClientId",
+                    "description": "OAuth client id (secret)."
+                },
+                {
+                    "name": "OAuthClientSecret",
+                    "description": "OAuth client secret (secret)."
+                },
+                {
+                    "name": "UseIAM",
+                    "description": "Use IAM user access key/secret to AssumeRole into RoleArn."
+                },
+                {
+                    "name": "IAMUserAccessKey",
+                    "description": "IAM user access key (secret)."
+                },
+                {
+                    "name": "IAMUserAccessSecret",
+                    "description": "IAM user access secret (secret)."
+                },
+                {
+                    "name": "ExternalId",
+                    "description": "Optional sts:ExternalId to supply on AssumeRole calls."
+                }
+            ],
+            "enrollment_config": [
+                {
+                    "name": "LifetimeDays",
+                    "description": "OPTIONAL: The number of days of validity to use when requesting certs. If not provided, default is 365"
+                }
+            ],
+            "product_ids": [
+                "EndEntity",
+                "EndEntityClientAuth",
+                "EndEntityServerAuth"
+            ]
+        }
+    }
 }

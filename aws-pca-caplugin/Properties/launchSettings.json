@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "AWSPCACAPlugin": {
+      "commandName": "Project",
+      "remoteDebugEnabled": false
+    }
+  }
+}

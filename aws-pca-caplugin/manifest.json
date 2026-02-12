@@ -1,0 +1,10 @@
+   {
+  "extensions": {
+    "Keyfactor.AnyGateway.Extensions.IAnyCAPlugin": {
+      "AWSPCACAPlugin": {
+        "assemblypath": "AWSPCACAPlugin.dll",
+        "TypeFullName": "Keyfactor.Extensions.CAPlugin.AWS.AWSPCACAPlugin"
+      }
+    }
+  }
+}

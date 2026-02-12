@@ -1,93 +1,116 @@
-# cpr-cagateway-template
+<h1 align="center" style="border-bottom: none">
+    AWSPCA CA  Gateway AnyCA Gateway REST Plugin
+</h1>
 
-## Template for new CA Gateway integrations
+<p align="center">
+  <!-- Badges -->
+<img src="https://img.shields.io/badge/integration_status-pilot-3D1973?style=flat-square" alt="Integration Status: pilot" />
+<a href="https://github.com/Keyfactor/aws-pca-caplugin-dev/releases"><img src="https://img.shields.io/github/v/release/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Release" /></a>
+<img src="https://img.shields.io/github/issues/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Issues" />
+<img src="https://img.shields.io/github/downloads/Keyfactor/aws-pca-caplugin-dev/total?style=flat-square&label=downloads&color=28B905" alt="GitHub Downloads (all assets, all releases)" />
+</p>
 
-### Use this repository to create new integrations for new CA Gateway integration types. 
-
-
-1. [Use this repository](#using-the-repository)
-1. [Update the integration-manifest.json](#updating-the-integration-manifest.json)
-1. [Add Keyfactor Bootstrap Workflow (keyfactor-bootstrap-workflow.yml)](#add-bootstrap)
-1. [Create required branches](#create-required-branches)
-1. [Replace template files/folders](#replace-template-files-and-folders)
-1. [Create initial prerelease](#create-initial-prerelease)
----
-
-#### Using the repository
-1. Select the ```Use this template``` button at the top of this page
-1. Update the repository name following [these guidelines](https://keyfactorinc.sharepoint.com/sites/IntegrationWiki/SitePages/GitHub-Processes.aspx#repository-naming-conventions) 
-    1. All repositories must be in lower-case
-	1. General pattern: company-product-type
-	1. e.g. hashicorp-vault-orchestator
-1. Click the ```Create repository``` button
-
----
-
-#### Updating the integration-manifest.json
-
-*The following properties must be updated in the integration-manifest.json*
-
-Clone the repository locally, use vsdev.io, or the GitHub online editor to update the file.
-
-* "name": "Friendly name for the integration"
-	* This will be used in the readme file generation and catalog entries
-* "description": "Brief description of the integration."
-	* This will be used in the readme file generation
-	* If the repository description is empty this value will be used for the repository description upon creating a release branch
-* "release_dir": "PATH\\\TO\\\BINARY\\\RELEASE\\\OUTPUT\\\FOLDER"
-	* Path separators can be "\\\\" or "/"
-	* Be sure to specify the release folder name. This can be found by running a Release build and noting the output folder
-	* Example: "AzureAppGatewayOrchestrator\\bin\\Release"
-* "gateway_framework": "" string denoting the required command gateway framework version
----
-
-#### Add Bootstrap 
-Add Keyfactor Bootstrap Workflow (keyfactor-bootstrap-workflow.yml). This can be copied directly from the workflow templates or through the Actions tab
-* Directly:
-    1. Create a file named ```.github\workflows\keyfactor-bootstrap-workflow.yml``` 
-	1. Copy the contents of [keyfactor/.github/workflow-templates/keyfactor-bootstrap-workflow.yml](https://raw.githubusercontent.com/Keyfactor/.github/main/workflow-templates/keyfactor-bootstrap-workflow.yml) into the file created in the previous step
-* Actions tab:
-    1. Navigate to the [Actions tab](./actions) in the new repository
-	1. Click the ```New workflow``` button
-	1. Find the ```Keyfactor Bootstrap Workflow``` and click the ```Configure``` button
-	1. Click the ```Commit changes...``` button on this screen and the next to add the bootstrap workflow to the main branch
-	
-A new build will run the tasks of a *Push* trigger on the main branch
-
-*Ensure there are no errors during the workflow run in the Actions tab.*
-
----
-
-#### Create required branches 
-1. Create a release branch from main: release-1.0
-1. Create a dev branch from the starting with the devops id in the format ab#\<DevOps-ID>, e.g. ab#53535. 
-    1. For the cleanest pull request merge, create the dev branch from the release branch. 
-	1. Optionally, add a suffix to the branch name indicating initial release. e.g. ab#53535-initial-release
-
----
+<p align="center">
+  <!-- TOC -->
+  <a href="#support">
+    <b>Support</b>
+  </a> 
+  ·
+  <a href="#requirements">
+    <b>Requirements</b>
+  </a>
+  ·
+  <a href="#installation">
+    <b>Installation</b>
+  </a>
+  ·
+  <a href="#license">
+    <b>License</b>
+  </a>
+  ·
+  <a href="https://github.com/orgs/Keyfactor/repositories?q=anycagateway">
+    <b>Related Integrations</b>
+  </a>
+</p>
 
 
-#### Replace template files and folders
-1. Replace the contents of readme_source.md
-1. Create a CHANGELOG.md file in the root of the repository indicating ```1.0: Initial release```
-1. Replace the SampleOrchestratorExtension.sln solution file and SampleOrchestratorExtension folder with your new orchestrator dotnet solution
-1. Push your updates to the dev branch (ab#xxxxx)
+This integration allows for the Synchronization, Enrollment, and Revocation of certificates from the AWS ACM PCA. This is the AnyGateway REST version.
 
----
+## Compatibility
+
+The AWSPCA CA  Gateway AnyCA Gateway REST plugin is compatible with the Keyfactor AnyCA Gateway REST 25.4.0 and later.
+
+## Support
+The AWSPCA CA  Gateway AnyCA Gateway REST plugin is supported by Keyfactor for Keyfactor customers. If you have a support issue, please open a support ticket with your Keyfactor representative. If you have a support issue, please open a support ticket via the Keyfactor Support Portal at https://support.keyfactor.com. 
+
+> To report a problem or suggest a new feature, use the **[Issues](../../issues)** tab. If you want to contribute actual bug fixes or proposed enhancements, use the **[Pull requests](../../pulls)** tab.
+
+## Requirements
+
+This integration is tested and confirmed as working for Anygateway REST 25.4 and above. Notice: Keyfactor Anygateway REST 25.4 requires the use of .Net 8.
+
+## Installation
+
+1. Install the AnyCA Gateway REST per the [official Keyfactor documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/InstallIntroduction.htm).
+
+2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CA  Gateway AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin-dev/releases/latest) from GitHub.
+
+3. Copy the unzipped directory (usually called `net6.0` or `net8.0`) to the Extensions directory:
 
 
-#### Create initial prerelease
-1. Create a pull request from the dev branch to the release-1.0 branch
+    ```shell
+    Depending on your AnyCA Gateway REST version, copy the unzipped directory to one of the following locations:
+    Program Files\Keyfactor\AnyCA Gateway\AnyGatewayREST\net6.0\Extensions
+    Program Files\Keyfactor\AnyCA Gateway\AnyGatewayREST\net8.0\Extensions
+    ```
+
+    > The directory containing the AWSPCA CA  Gateway AnyCA Gateway REST plugin DLLs (`net6.0` or `net8.0`) can be named anything, as long as it is unique within the `Extensions` directory.
+
+4. Restart the AnyCA Gateway REST service.
+
+5. Navigate to the AnyCA Gateway REST portal and verify that the Gateway recognizes the AWSPCA CA  Gateway plugin by hovering over the ⓘ symbol to the right of the Gateway on the top left of the portal.
+
+## Configuration
+
+1. Follow the [official AnyCA Gateway REST documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCA-Gateway.htm) to define a new Certificate Authority, and use the notes below to configure the **Gateway Registration** and **CA Connection** tabs:
+
+    * **Gateway Registration**
 
 
-----
 
-When the repository is ready for SE Demo, change the following property:
-* "status": "pilot"
+    * **CA Connection**
 
-When the integration has been approved by Support and Delivery teams, change the following property:
-* "status": "production"
+        Populate using the configuration fields collected in the [requirements](#requirements) section.
 
-If the repository is ready to be published in the public catalog, the following properties must be updated:
-* "update_catalog": true
-* "link_github": true
+        * **RoleArn** - Destination Role ARN to use for AWS auth. Supports the [profile] prefix when using Default SDK auth, e.g. [myprofile]arn:aws:iam::123456789012:role/MyRole. 
+        * **Region** - AWS Region (single region only, e.g. us-east-1). 
+        * **CAArn** - AWS ACM PCA Certificate Authority ARN. Example: arn:aws:acm-pca:us-east-1:123456789012:certificate-authority/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 
+        * **S3Bucket** - S3 bucket name used for PCA audit reports (inventory). The AWS identity in the Role context must have read/write permissions to this bucket. 
+        * **UseDefaultSdkAuth** - Use AWS SDK default credential inference (supports EC2 instance role, environment variables, shared credentials, etc.). If RoleArn is prefixed with [profile], that profile is prioritized. 
+        * **DefaultSdkAssumeRole** - If UseDefaultSdkAuth is true, setting this to true will perform AssumeRole into RoleArn using the inferred SDK credentials. 
+        * **UseOAuth** - Use OAuth OIDC authentication to obtain a token, then AssumeRole into RoleArn. 
+        * **OAuthScope** - OAuth scope to request. 
+        * **OAuthGrantType** - OAuth grant type to request (commonly client_credentials). 
+        * **OAuthUrl** - OAuth token endpoint URL. 
+        * **OAuthClientId** - OAuth client id (secret). 
+        * **OAuthClientSecret** - OAuth client secret (secret). 
+        * **UseIAM** - Use IAM user access key/secret to AssumeRole into RoleArn. 
+        * **IAMUserAccessKey** - IAM user access key (secret). 
+        * **IAMUserAccessSecret** - IAM user access secret (secret). 
+        * **ExternalId** - Optional sts:ExternalId to supply on AssumeRole calls. 
+
+2. PLEASE NOTE, AT THIS TIME THE RAPID_SSL TEMPLATE IS NOT SUPPORTED BY THE CSC API AND WILL NOT WORK WITH THIS INTEGRATION
+
+    The following certificate templates are supported:
+
+3. Follow the [official Keyfactor documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCA-Keyfactor.htm) to add each defined Certificate Authority to Keyfactor Command and import the newly defined Certificate Templates.
+
+
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE).
+
+## Related Integrations
+
+See all [Keyfactor Any CA Gateways (REST)](https://github.com/orgs/Keyfactor/repositories?q=anycagateway).
