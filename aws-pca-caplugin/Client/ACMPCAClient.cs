@@ -39,6 +39,8 @@ public sealed class AwsPcaClient : IAwsPcaClient
     private const string ENHANCED_KEY_USAGE_OID = "2.5.29.37";
     private const string SERVER_AUTH_OID = "1.3.6.1.5.5.7.3.1";
     private const string CLIENT_AUTH_OID = "1.3.6.1.5.5.7.3.2";
+
+    private readonly SemaphoreSlim _caInfoLock = new(1, 1);
     private readonly AWSCredentials AwsCredentials;
     private readonly string CaArn;
     private readonly ILogger Logger;
@@ -47,6 +49,7 @@ public sealed class AwsPcaClient : IAwsPcaClient
     private readonly RegionEndpoint Region;
     private readonly string RoleArn;
     private readonly string S3Bucket;
+    private string? _caKeyAlgorithmName;
     private IAmazonS3? S3Client;
 
     public AwsPcaClient(IAnyCAPluginConfigProvider configProvider)
@@ -127,11 +130,18 @@ public sealed class AwsPcaClient : IAwsPcaClient
             var csrBytes = PemUtilities.DERToPEM(PemUtilities.PEMToDER(request.CsrPem),
                 PemUtilities.PemObjectType.CertRequest);
 
+
+            var signingAlgoRes = await ResolveSigningAlgorithmAsync(request.SigningAlgorithm, cancellationToken)
+                .ConfigureAwait(false);
+            if (signingAlgoRes.Error != null)
+                return new IssueCertificateResponse { RegistrationError = signingAlgoRes.Error };
+
+            var signingAlgorithm = signingAlgoRes.Value!;
             var issueReq = new Amazon.ACMPCA.Model.IssueCertificateRequest
             {
                 CertificateAuthorityArn = CaArn,
                 Csr = new MemoryStream(Encoding.ASCII.GetBytes(csrBytes)),
-                SigningAlgorithm = SigningAlgorithm.SHA256WITHRSA,
+                SigningAlgorithm = signingAlgorithm,
                 IdempotencyToken = request.IdempotencyToken ?? Guid.NewGuid().ToString("N"),
                 Validity = new Validity
                 {
@@ -576,6 +586,163 @@ public sealed class AwsPcaClient : IAwsPcaClient
     {
         var key = InferTemplateTypeKey(cert);
         return Constants.TemplateARNs.ContainsKey(key) ? key : "Unknown";
+    }
+
+
+    private async Task<(string? Value, RegistrationError? Error)> GetCaKeyAlgorithmAsync(
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(_caKeyAlgorithmName))
+            return (_caKeyAlgorithmName, null);
+
+        await _caInfoLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_caKeyAlgorithmName))
+                return (_caKeyAlgorithmName, null);
+
+            try
+            {
+                var resp = await PcaClient.DescribeCertificateAuthorityAsync(
+                    new DescribeCertificateAuthorityRequest { CertificateAuthorityArn = CaArn },
+                    cancellationToken).ConfigureAwait(false);
+
+                // KeyAlgorithm is represented as a string in the service model; some SDK surfaces expose it as a string.
+                // Use reflection to remain tolerant across AWSSDK.ACMPCA versions.
+                var cfg = resp?.CertificateAuthority?.CertificateAuthorityConfiguration;
+                if (cfg == null)
+                    return (null,
+                        new RegistrationError
+                        {
+                            ErrorCode = "AwsDescribeCaFailed",
+                            Description = "DescribeCertificateAuthority returned no configuration."
+                        });
+
+                var prop = cfg.GetType().GetProperty("KeyAlgorithm");
+                var val = prop?.GetValue(cfg)?.ToString();
+                if (string.IsNullOrWhiteSpace(val))
+                    return (null,
+                        new RegistrationError
+                        {
+                            ErrorCode = "AwsDescribeCaFailed",
+                            Description = "Unable to read CA KeyAlgorithm from DescribeCertificateAuthority response."
+                        });
+
+                _caKeyAlgorithmName = val.Trim();
+                return (_caKeyAlgorithmName, null);
+            }
+            catch (Exception ex)
+            {
+                return (null,
+                    new RegistrationError
+                        { ErrorCode = "AwsDescribeCaFailed", Description = "Failed to query CA KeyAlgorithm." });
+            }
+        }
+        finally
+        {
+            _caInfoLock.Release();
+        }
+    }
+
+    private static bool IsKnownSigningAlgorithm(SigningAlgorithm alg)
+    {
+        var v = alg.Value;
+        return v == SigningAlgorithm.SHA256WITHRSA.Value
+               || v == SigningAlgorithm.SHA384WITHRSA.Value
+               || v == SigningAlgorithm.SHA512WITHRSA.Value
+               || v == SigningAlgorithm.SHA256WITHECDSA.Value
+               || v == SigningAlgorithm.SHA384WITHECDSA.Value
+               || v == SigningAlgorithm.SHA512WITHECDSA.Value
+               || v == SigningAlgorithm.SM3WITHSM2.Value
+               || v == SigningAlgorithm.ML_DSA_44.Value
+               || v == SigningAlgorithm.ML_DSA_65.Value
+               || v == SigningAlgorithm.ML_DSA_87.Value;
+    }
+
+    private static bool IsSigningAlgorithmCompatible(string caKeyAlgorithmName, SigningAlgorithm signingAlgorithm)
+    {
+        var ka = caKeyAlgorithmName.Trim();
+        var sig = signingAlgorithm.Value;
+
+        if (ka.StartsWith("RSA_", StringComparison.OrdinalIgnoreCase))
+            return sig.EndsWith("WITHRSA", StringComparison.OrdinalIgnoreCase);
+
+        if (ka.StartsWith("EC_", StringComparison.OrdinalIgnoreCase))
+            return sig.EndsWith("WITHECDSA", StringComparison.OrdinalIgnoreCase);
+
+        if (ka.Equals("SM2", StringComparison.OrdinalIgnoreCase))
+            return sig.Equals(SigningAlgorithm.SM3WITHSM2.Value, StringComparison.OrdinalIgnoreCase);
+
+        if (ka.StartsWith("ML_DSA_", StringComparison.OrdinalIgnoreCase))
+            return sig.Equals(ka, StringComparison.OrdinalIgnoreCase);
+
+        return false;
+    }
+
+    private static SigningAlgorithm DefaultSigningAlgorithmForCaKey(string caKeyAlgorithmName)
+    {
+        var ka = caKeyAlgorithmName.Trim();
+
+        if (ka.StartsWith("RSA_", StringComparison.OrdinalIgnoreCase))
+            return SigningAlgorithm.SHA256WITHRSA;
+
+        if (ka.StartsWith("EC_", StringComparison.OrdinalIgnoreCase))
+        {
+            if (ka.Equals("EC_secp384r1", StringComparison.OrdinalIgnoreCase))
+                return SigningAlgorithm.SHA384WITHECDSA;
+
+            if (ka.Equals("EC_secp521r1", StringComparison.OrdinalIgnoreCase))
+                return SigningAlgorithm.SHA512WITHECDSA;
+
+            return SigningAlgorithm.SHA256WITHECDSA;
+        }
+
+        if (ka.Equals("SM2", StringComparison.OrdinalIgnoreCase))
+            return SigningAlgorithm.SM3WITHSM2;
+
+        if (ka.Equals("ML_DSA_44", StringComparison.OrdinalIgnoreCase))
+            return SigningAlgorithm.ML_DSA_44;
+        if (ka.Equals("ML_DSA_65", StringComparison.OrdinalIgnoreCase))
+            return SigningAlgorithm.ML_DSA_65;
+        if (ka.Equals("ML_DSA_87", StringComparison.OrdinalIgnoreCase))
+            return SigningAlgorithm.ML_DSA_87;
+
+        // Fallback
+        return SigningAlgorithm.SHA256WITHRSA;
+    }
+
+    private async Task<(SigningAlgorithm? Value, RegistrationError? Error)> ResolveSigningAlgorithmAsync(
+        string? requestedSigningAlgorithm,
+        CancellationToken cancellationToken)
+    {
+        var caKeyRes = await GetCaKeyAlgorithmAsync(cancellationToken).ConfigureAwait(false);
+        if (caKeyRes.Error != null)
+            return (null, caKeyRes.Error);
+
+        var caKey = caKeyRes.Value!;
+        if (!string.IsNullOrWhiteSpace(requestedSigningAlgorithm))
+        {
+            var resolved = SigningAlgorithm.FindValue(requestedSigningAlgorithm.Trim());
+            if (!IsKnownSigningAlgorithm(resolved))
+                return (null, new RegistrationError
+                {
+                    ErrorCode = "InvalidConfiguration",
+                    Description =
+                        $"SigningAlgorithm '{requestedSigningAlgorithm}' is not a supported AWS ACM PCA SigningAlgorithm value."
+                });
+
+            if (!IsSigningAlgorithmCompatible(caKey, resolved))
+                return (null, new RegistrationError
+                {
+                    ErrorCode = "InvalidConfiguration",
+                    Description =
+                        $"SigningAlgorithm '{requestedSigningAlgorithm}' is not compatible with CA KeyAlgorithm '{caKey}'."
+                });
+
+            return (resolved, null);
+        }
+
+        return (DefaultSigningAlgorithmForCaKey(caKey), null);
     }
 
     private static class ConfigKeys
