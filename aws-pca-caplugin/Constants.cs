@@ -72,4 +72,5 @@ public static class Constants
 public class EnrollmentConfigConstants
 {
     public const string LifetimeDays = "LifetimeDays";
+    public const string SigningAlgorithm = "SigningAlgorithm";
 }
