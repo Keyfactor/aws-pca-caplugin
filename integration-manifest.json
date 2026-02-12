@@ -82,6 +82,10 @@
                 {
                     "name": "LifetimeDays",
                     "description": "OPTIONAL: The number of days of validity to use when requesting certs. If not provided, default is 365"
+                },
+                {
+                    "name": "SigningAlgorithm",
+                    "description": "Required: AWS ACM PCA certificate signature algorithm to use when issuing certificates. Value is an AWS PCA SigningAlgorithm enum name (case-insensitive), e.g. SHA256WITHRSA, SHA384WITHRSA, SHA256WITHECDSA. If omitted, the plugin selects a default compatible with the CA key algorithm."
                 }
             ],
             "product_ids": [

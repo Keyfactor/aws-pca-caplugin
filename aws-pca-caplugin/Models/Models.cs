@@ -42,12 +42,19 @@ public sealed class IssueCertificateRequest
     /// <summary>Optional desired term in days. If null, defaults to 365.</summary>
     public int? ValidityDays { get; set; }
 
+    /// <summary>
+    ///     Optional override for ACM PCA IssueCertificate.SigningAlgorithm.
+    ///     If null/empty, the client auto-selects a compatible default based on the CA KeyAlgorithm.
+    /// </summary>
+    public string? SigningAlgorithm { get; set; }
+
     /// <summary>Optional idempotency token.</summary>
     public string? IdempotencyToken { get; set; }
 }
 
 /// <summary>
-///     Mirrors the CSC plugin expectations: contains the certificate payload + a Keyfactor-accepted numeric status.
+///     Response wrapper that carries the issued certificate payload and status.: contains the certificate payload + a
+///     Keyfactor-accepted numeric status.
 /// </summary>
 public sealed class CertificateResponse
 {
