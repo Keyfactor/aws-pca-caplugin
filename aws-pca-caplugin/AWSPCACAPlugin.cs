@@ -358,6 +358,15 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 parsed > 0)
                 days = parsed;
 
+
+            // Optional signing algorithm override (template parameter)
+            string? signingAlgorithm = null;
+            if (productInfo.ProductParameters != null &&
+                productInfo.ProductParameters.TryGetValue(EnrollmentConfigConstants.SigningAlgorithm,
+                    out var algoStr) &&
+                !string.IsNullOrWhiteSpace(algoStr))
+                signingAlgorithm = algoStr.Trim();
+
             // Normalize CSR to PEM (keeps your existing behavior)
             csr = PemUtilities.DERToPEM(PemUtilities.PEMToDER(csr), PemUtilities.PemObjectType.CertRequest);
 
@@ -369,6 +378,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                             csr,
                             productInfo.ProductID,
                             days,
+                            signingAlgorithm,
                             "Certificate Issued")
                         .ConfigureAwait(false);
                 }
@@ -627,6 +637,15 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 Hidden = false,
                 DefaultValue = 365,
                 Type = "Number"
+            },
+            // this is used to passdown csr details/prefill. will be overridden by commmand if not present. 
+            [EnrollmentConfigConstants.SigningAlgorithm] = new()
+            {
+                Comments =
+                    "Required: AWS ACM PCA certificate signature algorithm to use when issuing certificates. Value is an AWS PCA SigningAlgorithm enum name (case-insensitive), e.g. SHA256WITHRSA, SHA384WITHRSA, SHA256WITHECDSA. If omitted, the plugin selects a default compatible with the CA key algorithm.",
+                Hidden = false,
+                DefaultValue = "SHA256WITHRSA",
+                Type = "String"
             }
         };
     }
@@ -641,6 +660,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
         string csrPem,
         string productId,
         int validityDays,
+        string? signingAlgorithm,
         string statusMessageOnSuccess,
         string? idempotencyToken = null)
     {
@@ -650,6 +670,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
             CsrPem = csrPem,
             ProductId = productId,
             ValidityDays = validityDays,
+            SigningAlgorithm = signingAlgorithm,
             IdempotencyToken = idempotencyToken ?? Guid.NewGuid().ToString("N")
         };
 
