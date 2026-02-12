@@ -5,9 +5,9 @@
 <p align="center">
   <!-- Badges -->
 <img src="https://img.shields.io/badge/integration_status-pilot-3D1973?style=flat-square" alt="Integration Status: pilot" />
-<a href="https://github.com/Keyfactor/aws-pca-caplugin-dev/releases"><img src="https://img.shields.io/github/v/release/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Release" /></a>
-<img src="https://img.shields.io/github/issues/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Issues" />
-<img src="https://img.shields.io/github/downloads/Keyfactor/aws-pca-caplugin-dev/total?style=flat-square&label=downloads&color=28B905" alt="GitHub Downloads (all assets, all releases)" />
+<a href="https://github.com/Keyfactor/aws-pca-caplugin/releases"><img src="https://img.shields.io/github/v/release/Keyfactor/aws-pca-caplugin?style=flat-square" alt="Release" /></a>
+<img src="https://img.shields.io/github/issues/Keyfactor/aws-pca-caplugin?style=flat-square" alt="Issues" />
+<img src="https://img.shields.io/github/downloads/Keyfactor/aws-pca-caplugin/total?style=flat-square&label=downloads&color=28B905" alt="GitHub Downloads (all assets, all releases)" />
 </p>
 
 <p align="center">
@@ -53,7 +53,7 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
 
 1. Install the AnyCA Gateway REST per the [official Keyfactor documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/InstallIntroduction.htm).
 
-2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CA  Gateway AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin-dev/releases/latest) from GitHub.
+2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CA  Gateway AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin/releases/latest) from GitHub.
 
 3. Copy the unzipped directory (usually called `net6.0` or `net8.0`) to the Extensions directory:
 
@@ -110,7 +110,7 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
 4. In Keyfactor Command (v12.3+), for each imported Certificate Template, follow the [official documentation](https://software.keyfactor.com/Core-OnPrem/Current/Content/ReferenceGuide/Configuring%20Template%20Options.htm) to define enrollment fields for each of the following parameters:
 
     * **LifetimeDays** - OPTIONAL: The number of days of validity to use when requesting certs. If not provided, default is 365 
-    * **SigningAlgorithm** - Required: Signing Algorithm to use with the PCA. 
+    * **SigningAlgorithm** - Required: AWS ACM PCA certificate signature algorithm to use when issuing certificates. Value is an AWS PCA SigningAlgorithm enum name (case-insensitive), e.g. SHA256WITHRSA, SHA384WITHRSA, SHA256WITHECDSA. If omitted, the plugin selects a default compatible with the CA key algorithm. 
 
 
 ## Authentication (Access Key + Secret)
@@ -315,6 +315,52 @@ passed to AWS ACM PCA `IssueCertificate`.
 - ML-DSA (post-quantum): `ML_DSA_44`, `ML_DSA_65`, `ML_DSA_87`
 
 ### Allowed CA key algorithm and signing algorithm combinations
+
+The CA key algorithm is the PCA CA **KeyAlgorithm** (not the subject key in the CSR). The signing algorithm must match the CA key family.
+
+| CA KeyAlgorithm | Allowed SigningAlgorithm values |
+|---|---|
+| `RSA_2048`, `RSA_3072`, `RSA_4096` | `SHA256WITHRSA`, `SHA384WITHRSA`, `SHA512WITHRSA` |
+| `EC_prime256v1`, `EC_secp384r1`, `EC_secp521r1` | `SHA256WITHECDSA`, `SHA384WITHECDSA`, `SHA512WITHECDSA` |
+| `SM2` | `SM3WITHSM2` |
+| `ML_DSA_44` | `ML_DSA_44` |
+| `ML_DSA_65` | `ML_DSA_65` |
+| `ML_DSA_87` | `ML_DSA_87` |
+
+### Auto-selection defaults
+
+When `SigningAlgorithm` is omitted, the plugin selects:
+
+- RSA CAs -> `SHA256WITHRSA`
+- EC P-256 -> `SHA256WITHECDSA`
+- EC P-384 -> `SHA384WITHECDSA`
+- EC P-521 -> `SHA512WITHECDSA`
+- SM2 -> `SM3WITHSM2`
+- ML-DSA -> exact-match (`ML_DSA_44/65/87`)
+
+---
+
+## Signing algorithm selection (ACM PCA)
+
+The connector supports an optional **template / product parameter** named `SigningAlgorithm` that controls the **certificate signature algorithm**
+passed to AWS ACM PCA `IssueCertificate`.
+
+- If **not set**, the plugin will **auto-select** a compatible default based on the CA `KeyAlgorithm` returned by
+  `DescribeCertificateAuthority`.
+- If **set**, the plugin validates the value and **rejects incompatible combinations** before calling AWS.
+
+### Where to configure
+
+Set `SigningAlgorithm` on the **AnyGateway template** (product parameters), alongside `LifetimeDays`.
+
+### Valid `SigningAlgorithm` values (AWS PCA)
+
+- RSA family: `SHA256WITHRSA`, `SHA384WITHRSA`, `SHA512WITHRSA`
+- ECDSA family: `SHA256WITHECDSA`, `SHA384WITHECDSA`, `SHA512WITHECDSA`
+- SM2: `SM3WITHSM2`
+- ML-DSA (post-quantum): `ML_DSA_44`, `ML_DSA_65`, `ML_DSA_87`
+
+### Allowed CA key algorithm <-> signing algorithm combinations
 
 The CA key algorithm is the PCA CA **KeyAlgorithm** (not the subject key in the CSR). The signing algorithm must match the CA key family.
 
