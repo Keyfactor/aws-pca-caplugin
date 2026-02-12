@@ -87,7 +87,7 @@ Download the **PCA root certificate** from AWS and have it ready to import into 
 
 ---
 
-### Example IAM policies for the assumed role 
+### Example IAM policies for the assumed role
 
 The following examples are intended as **copy/adapt templates**. 
 
@@ -189,3 +189,8 @@ The following examples are intended as **copy/adapt templates**.
   ]
 }
 ```
+
+## Gateway Registration
+
+TODO Gateway Registration is a required section
+
