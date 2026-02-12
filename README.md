@@ -5,9 +5,9 @@
 <p align="center">
   <!-- Badges -->
 <img src="https://img.shields.io/badge/integration_status-pilot-3D1973?style=flat-square" alt="Integration Status: pilot" />
-<a href="https://github.com/Keyfactor/aws-pca-caplugin-dev/releases"><img src="https://img.shields.io/github/v/release/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Release" /></a>
-<img src="https://img.shields.io/github/issues/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Issues" />
-<img src="https://img.shields.io/github/downloads/Keyfactor/aws-pca-caplugin-dev/total?style=flat-square&label=downloads&color=28B905" alt="GitHub Downloads (all assets, all releases)" />
+<a href="https://github.com/Keyfactor/aws-pca-caplugin/releases"><img src="https://img.shields.io/github/v/release/Keyfactor/aws-pca-caplugin?style=flat-square" alt="Release" /></a>
+<img src="https://img.shields.io/github/issues/Keyfactor/aws-pca-caplugin?style=flat-square" alt="Issues" />
+<img src="https://img.shields.io/github/downloads/Keyfactor/aws-pca-caplugin/total?style=flat-square&label=downloads&color=28B905" alt="GitHub Downloads (all assets, all releases)" />
 </p>
 
 <p align="center">
@@ -53,7 +53,7 @@ This integration is tested and confirmed as working for Anygateway REST 25.4 and
 
 1. Install the AnyCA Gateway REST per the [official Keyfactor documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/InstallIntroduction.htm).
 
-2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CA  Gateway AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin-dev/releases/latest) from GitHub.
+2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CA  Gateway AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin/releases/latest) from GitHub.
 
 3. Copy the unzipped directory (usually called `net6.0` or `net8.0`) to the Extensions directory:
 
@@ -76,7 +76,7 @@ This integration is tested and confirmed as working for Anygateway REST 25.4 and
 
     * **Gateway Registration**
 
-
+        TODO Gateway Registration is a required section
 
     * **CA Connection**
 
@@ -99,9 +99,11 @@ This integration is tested and confirmed as working for Anygateway REST 25.4 and
         * **IAMUserAccessSecret** - IAM user access secret (secret). 
         * **ExternalId** - Optional sts:ExternalId to supply on AssumeRole calls. 
 
-2. PLEASE NOTE, AT THIS TIME THE RAPID_SSL TEMPLATE IS NOT SUPPORTED BY THE CSC API AND WILL NOT WORK WITH THIS INTEGRATION
+2. Define [Certificate Profiles](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCP-Gateway.htm) and [Certificate Templates](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCA-Gateway.htm) for the Certificate Authority as required. One Certificate Profile must be defined per Certificate Template. It's recommended that each Certificate Profile be named after the Product ID. The AWSPCA CA  Gateway plugin supports the following product IDs:
 
-    The following certificate templates are supported:
+    * **EndEntity**
+    * **EndEntityClientAuth**
+    * **EndEntityServerAuth**
 
 3. Follow the [official Keyfactor documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCA-Keyfactor.htm) to add each defined Certificate Authority to Keyfactor Command and import the newly defined Certificate Templates.
 
