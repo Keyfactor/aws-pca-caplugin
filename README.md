@@ -76,7 +76,7 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
 
     * **Gateway Registration**
 
-        TODO Gateway Registration is a required section
+        Download the **PCA root certificate** from AWS and have it ready to import into the Gateway **in `.pem` format**.
 
     * **CA Connection**
 
@@ -121,7 +121,7 @@ Before configuring the CAPlugin, have the following prepared:
 - **Access Key ID** (example format: `AKIAIOSFODNN7EXAMPLE`)
 - **Secret Access Key** (example format: `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`)
 
-#### 2) A target IAM Role the connector will run as (recommended)
+#### 2) A target IAM Role the Gateway will run as (recommended)
 Example:
 - `arn:aws:iam::123456789012:role/Keyfactor-AnyGateway-AcmPcaRole`
 
