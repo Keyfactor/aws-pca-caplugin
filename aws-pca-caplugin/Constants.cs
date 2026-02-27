@@ -61,6 +61,7 @@ public static class Constants
     public static string IAM_USER_ACCESS_KEY = "IAMUserAccessKey";
     public static string IAM_USER_ACCESS_SECRET = "IAMUserAccessSecret";
     public static string EXTERNAL_ID = "ExternalId";
+    public static string Enabled = "Enabled";
 
 
     public static List<string> GetTemplateTypes()
@@ -72,4 +73,5 @@ public static class Constants
 public class EnrollmentConfigConstants
 {
     public const string LifetimeDays = "LifetimeDays";
+    public const string SigningAlgorithm = "SigningAlgorithm";
 }
