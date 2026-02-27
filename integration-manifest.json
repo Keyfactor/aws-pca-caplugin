@@ -76,6 +76,10 @@
                 {
                     "name": "ExternalId",
                     "description": "Optional sts:ExternalId to supply on AssumeRole calls."
+                },
+                {
+                    "name": "Enabled",
+                    "description": "Flag to Enable or Disable gateway functionality. Disabling is primarily used to allow creation of the CA prior to configuration information being available."
                 }
             ],
             "enrollment_config": [

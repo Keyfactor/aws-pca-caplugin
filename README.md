@@ -98,6 +98,7 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
         * **IAMUserAccessKey** - IAM user access key (secret). 
         * **IAMUserAccessSecret** - IAM user access secret (secret). 
         * **ExternalId** - Optional sts:ExternalId to supply on AssumeRole calls. 
+        * **Enabled** - Flag to Enable or Disable gateway functionality. Disabling is primarily used to allow creation of the CA prior to configuration information being available. 
 
 2. Define [Certificate Profiles](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCP-Gateway.htm) and [Certificate Templates](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCA-Gateway.htm) for the Certificate Authority as required. One Certificate Profile must be defined per Certificate Template. It's recommended that each Certificate Profile be named after the Product ID. The AWSPCA CA  Gateway plugin supports the following product IDs:
 
