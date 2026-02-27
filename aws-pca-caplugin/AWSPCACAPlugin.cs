@@ -5,11 +5,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions
 // and limitations under the License.
 
-using System.Collections.Concurrent;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.RegularExpressions;
 using Amazon.ACMPCA;
 using Keyfactor.AnyGateway.Extensions;
 using Keyfactor.Extensions.CAPlugin.AWS.Client;
@@ -19,6 +14,12 @@ using Keyfactor.Logging;
 using Keyfactor.PKI.Enums.EJBCA;
 using Keyfactor.PKI.PEM;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.RegularExpressions;
+using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace Keyfactor.Extensions.CAPlugin.AWS;
 
@@ -33,15 +34,23 @@ public class AWSPCACAPlugin : IAnyCAPlugin
     }
 
     private IAwsPcaClient AwsClient { get; set; }
-
+    private bool _enabled = false;
 
     //done
     public void Initialize(IAnyCAPluginConfigProvider configProvider, ICertificateDataReader certificateDataReader)
     {
         Logger.MethodEntry(LogLevel.Debug);
         _certificateDataReader = certificateDataReader;
+        var _enabled = bool.Parse(GetRequiredString(configProvider, "Enabled"));
+        if (!_enabled)
+        {
+            Logger.LogWarning($"The CA is currently in the Disabled state. It must be Enabled to perform operations. Skipping config validation and AWS PCA Client creation...");
+            Logger.MethodExit();
+            return;
+        }
         AwsClient = new AwsPcaClient(configProvider);
         Logger.MethodExit(LogLevel.Debug);
+
     }
 
     //done
@@ -455,6 +464,12 @@ public class AWSPCACAPlugin : IAnyCAPlugin
     public async Task Ping()
     {
         Logger.MethodEntry();
+        if (!_enabled)
+        {
+            Logger.LogWarning($"The CA is currently in the Disabled state. It must be Enabled to perform operations. Skipping config validation and AWS PCA Client creation...");
+            Logger.MethodExit();
+            return;
+        }
         try
         {
             Logger.LogInformation("Ping request received");
@@ -470,12 +485,27 @@ public class AWSPCACAPlugin : IAnyCAPlugin
     }
 
     //do
-    public async Task ValidateCAConnectionInfo(Dictionary<string, object> connectionInfo)
+    public Task ValidateCAConnectionInfo(Dictionary<string, object> connectionInfo)
     {
+        try
+        {
+            if (!(bool)connectionInfo["Enabled"])
+            {
+                Logger.LogWarning($"The CA is currently in the Disabled state. It must be Enabled to perform operations. Skipping validation...");
+                Logger.MethodExit(LogLevel.Trace);
+                return Task.CompletedTask;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Exception: {LogHandler.FlattenException(ex)}");
+        }
+
+        return Task.CompletedTask;
     }
 
     //do
-    public async Task ValidateProductInfo(EnrollmentProductInfo productInfo,
+    public Task ValidateProductInfo(EnrollmentProductInfo productInfo,
         Dictionary<string, object> connectionInfo)
     {
         var certType = Constants.GetTemplateTypes().Find(x =>
@@ -484,6 +514,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
         if (certType == null) throw new ArgumentException($"Cannot find {productInfo.ProductID}", "ProductId");
 
         Logger.LogInformation($"Validated {certType} ({certType})configured for AnyGateway");
+        return Task.CompletedTask;
     }
 
     //done
@@ -620,6 +651,13 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 Hidden = false,
                 DefaultValue = "",
                 Type = "String"
+            },
+            [Constants.Enabled] = new ()
+            {
+                Comments = "Flag to Enable or Disable gateway functionality. Disabling is primarily used to allow creation of the CA prior to configuration information being available.",
+                Hidden = false,
+                DefaultValue = true,
+                Type = "Boolean"
             }
         };
     }
@@ -1089,6 +1127,17 @@ public class AWSPCACAPlugin : IAnyCAPlugin
         ).ToArray());
 
         return text;
+    }
+    private static string GetRequiredString(IAnyCAPluginConfigProvider provider, string key)
+    {
+        if (!provider.CAConnectionData.TryGetValue(key, out var obj) || obj == null)
+            throw new InvalidOperationException($"Missing required configuration value '{key}'.");
+
+        var str = obj.ToString();
+        if (string.IsNullOrWhiteSpace(str))
+            throw new InvalidOperationException($"Configuration value '{key}' is empty.");
+
+        return str!;
     }
 
     #endregion
