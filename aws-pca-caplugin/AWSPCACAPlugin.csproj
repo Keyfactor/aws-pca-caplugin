@@ -13,7 +13,8 @@
 
 
 	<Target Name="CustomPostBuild" AfterTargets="PostBuildEvent">
-		<Exec Condition="'$(Configuration)'=='DebugAndPush'" Command="PowerShell -ExecutionPolicy Bypass -File &quot;C:\Users\mkachkaev\source\repos\scripts\SyncScriptAWS_GT.ps1&quot;&#xA;" />
+		<Exec Condition="'$(Configuration)'=='DebugAndPush'"
+		      Command="PowerShell -ExecutionPolicy Bypass -File &quot;C:\Users\mkachkaev\source\repos\scripts\SyncScriptAWS_GT.ps1&quot;&#xA;" />
 	</Target>
 
 
