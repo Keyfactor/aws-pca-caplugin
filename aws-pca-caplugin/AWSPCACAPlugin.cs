@@ -87,10 +87,12 @@ public class AWSPCACAPlugin : IAnyCAPlugin
             throw;
         }
     }
-
-    //done
-    public async Task Synchronize(BlockingCollection<AnyCAPluginCertificate> blockingBuffer, DateTime? lastSync,
-        bool fullSync, CancellationToken cancelToken)
+    // done
+    public async Task Synchronize(
+        BlockingCollection<AnyCAPluginCertificate> blockingBuffer,
+        DateTime? lastSync,
+        bool fullSync,
+        CancellationToken cancelToken)
     {
         Logger.MethodEntry();
         Logger.LogTrace(
@@ -114,6 +116,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 var caRequestId = SafeRequestIdFromArn(audit.certificateArn);
 
                 if (string.IsNullOrWhiteSpace(caRequestId) && !string.IsNullOrWhiteSpace(audit.certificateSerial))
+                {
                     try
                     {
                         caRequestId = await _certificateDataReader
@@ -125,6 +128,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                         Logger.LogTrace(
                             $"Could not map serial to requestId. serial={audit.certificateSerial}. {ex.Message}");
                     }
+                }
 
                 if (string.IsNullOrWhiteSpace(caRequestId))
                 {
@@ -160,7 +164,8 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 {
                     var exp = _certificateDataReader.GetExpirationDateByRequestId(caRequestId);
                     if (exp.HasValue && exp.Value.ToUniversalTime() <= DateTime.UtcNow &&
-                        newStatus == (int)EndEntityStatus.GENERATED) newStatus = (int)EndEntityStatus.HISTORICAL;
+                        newStatus == (int)EndEntityStatus.GENERATED)
+                        newStatus = (int)EndEntityStatus.HISTORICAL;
                 }
                 catch (Exception ex)
                 {
@@ -184,6 +189,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                     }
 
                     if (exists)
+                    {
                         try
                         {
                             var oldStatus = await _certificateDataReader.GetStatusByRequestID(caRequestId)
@@ -200,65 +206,92 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                             Logger.LogWarning(
                                 $"GetStatusByRequestID failed for {caRequestId}: {ex.Message}. Proceeding to emit.");
                         }
+                    }
                 }
 
-                // If we only need to update status (revoked/historical) and you don't want to fetch the cert again:
-                // - For revoked/historical, Keyfactor usually still accepts just status update, but depending on your pipeline,
-                //   you may want to always include Certificate for GENERATED.
-                // Here: fetch cert for GENERATED/HISTORICAL; skip fetch for REVOKED if ARN missing.
-                string? certB64 = null;
+                // Fetch certificate material when needed:
+                // - GENERATED/HISTORICAL: must fetch (otherwise Keyfactor can't ingest new cert)
+                // - REVOKED: best-effort fetch if ARN exists (so revoked updates can include PEM); otherwise emit status-only
+                string? certPayload = null;
                 string? productId = null;
 
-                if (newStatus == (int)EndEntityStatus.GENERATED || newStatus == (int)EndEntityStatus.HISTORICAL)
+                bool mustFetchForIngest =
+                    newStatus == (int)EndEntityStatus.GENERATED ||
+                    newStatus == (int)EndEntityStatus.HISTORICAL;
+
+                bool bestEffortFetch =
+                    newStatus == (int)EndEntityStatus.REVOKED;
+
+                bool shouldAttemptFetch = mustFetchForIngest || bestEffortFetch;
+
+                if (shouldAttemptFetch)
                 {
                     if (string.IsNullOrWhiteSpace(audit.certificateArn))
                     {
-                        Logger.LogTrace($"Skipping {caRequestId}: no certificateArn to retrieve certificate.");
-                        continue;
-                    }
-
-                    var certResp = await AwsClient.SubmitGetCertificateByArnAsync(audit.certificateArn, cancelToken)
-                        .ConfigureAwait(false);
-
-                    if (certResp?.Status == (int)EndEntityStatus.INPROCESS)
-                    {
-                        // Emit in-process update without cert payload
-                        blockingBuffer.Add(new AnyCAPluginCertificate
+                        if (mustFetchForIngest)
                         {
-                            CARequestID = caRequestId,
-                            Status = (int)EndEntityStatus.INPROCESS,
-                            ProductID = certResp.CertificateType
-                        }, cancelToken);
+                            Logger.LogTrace($"Skipping {caRequestId}: no certificateArn to retrieve certificate.");
+                            continue; // can't ingest a new/active cert without payload
+                        }
 
-                        continue;
+                        // REVOKED (best-effort): status-only update
+                        Logger.LogTrace($"Revoked status-only for {caRequestId}: no certificateArn present.");
                     }
-
-                    if (certResp?.RegistrationError != null)
+                    else
                     {
-                        Logger.LogTrace(
-                            $"Skipping {caRequestId}: GetCertificate error: {certResp.RegistrationError.Description}");
-                        continue;
-                    }
+                        var certResp = await AwsClient
+                            .SubmitGetCertificateByArnAsync(audit.certificateArn, cancelToken)
+                            .ConfigureAwait(false);
 
-                    certB64 = certResp.Certificate;
-                    productId = certResp.CertificateType;
+                        if (certResp?.Status == (int)EndEntityStatus.INPROCESS)
+                        {
+                            // Emit in-process update without cert payload
+                            blockingBuffer.Add(new AnyCAPluginCertificate
+                            {
+                                CARequestID = caRequestId,
+                                Status = (int)EndEntityStatus.INPROCESS,
+                                ProductID = certResp.CertificateType
+                            }, cancelToken);
 
+                            continue;
+                        }
 
-                    if (string.IsNullOrWhiteSpace(certB64))
-                    {
-                        Logger.LogTrace($"Skipping {caRequestId}: unable to obtain end-entity certificate payload.");
-                        continue;
+                        if (certResp?.RegistrationError != null)
+                        {
+                            if (mustFetchForIngest)
+                            {
+                                Logger.LogTrace(
+                                    $"Skipping {caRequestId}: GetCertificate error: {certResp.RegistrationError.Description}");
+                                continue;
+                            }
+
+                            // REVOKED best-effort: proceed status-only
+                            Logger.LogTrace(
+                                $"Revoked status-only for {caRequestId}: GetCertificate error: {certResp.RegistrationError.Description}");
+                        }
+                        else
+                        {
+                            certPayload = certResp?.Certificate;
+                            productId = certResp?.CertificateType;
+
+                            if (mustFetchForIngest && string.IsNullOrWhiteSpace(certPayload))
+                            {
+                                Logger.LogTrace($"Skipping {caRequestId}: unable to obtain end-entity certificate payload.");
+                                continue;
+                            }
+                        }
                     }
                 }
 
                 var finalsubmit = new AnyCAPluginCertificate
                 {
                     CARequestID = caRequestId,
-                    Certificate =
-                        GetEndEntityCertificate(certB64), // null is OK for REVOKED updates if your pipeline accepts it
+                    // For REVOKED: this will now be populated when ARN exists + GetCertificate succeeds; otherwise null (status-only).
+                    Certificate = GetEndEntityCertificate(certPayload),
                     Status = newStatus,
                     ProductID = productId
                 };
+
                 // Emit to buffer as AnyGateway expects.
                 blockingBuffer.Add(finalsubmit, cancelToken);
             }
@@ -382,60 +415,60 @@ public class AWSPCACAPlugin : IAnyCAPlugin
             switch (enrollmentType)
             {
                 case EnrollmentType.New:
-                {
-                    return await IssueAndFetchAsync(
-                            csr,
-                            productInfo.ProductID,
-                            days,
-                            signingAlgorithm,
-                            "Certificate Issued")
-                        .ConfigureAwait(false);
-                }
-
-                case EnrollmentType.RenewOrReissue:
-                {
-                    if (productInfo.ProductParameters == null ||
-                        !TryGetProductParam(productInfo.ProductParameters, "PriorCertSN", out var priorSn) ||
-                        string.IsNullOrWhiteSpace(priorSn))
-                        return new EnrollmentResult
-                        {
-                            Status = (int)EndEntityStatus.FAILED,
-                            StatusMessage =
-                                "Renew/Reissue requires ProductParameters['PriorCertSN'] (hex serial number)."
-                        };
-
-                    string priorRequestId;
-                    try
                     {
-                        priorRequestId = await _certificateDataReader
-                            .GetRequestIDBySerialNumber(priorSn)
+                        return await IssueAndFetchAsync(
+                                csr,
+                                productInfo.ProductID,
+                                days,
+                                signingAlgorithm,
+                                "Certificate Issued")
                             .ConfigureAwait(false);
                     }
-                    catch (Exception ex)
+
+                case EnrollmentType.RenewOrReissue:
                     {
-                        return new EnrollmentResult
+                        if (productInfo.ProductParameters == null ||
+                            !TryGetProductParam(productInfo.ProductParameters, "PriorCertSN", out var priorSn) ||
+                            string.IsNullOrWhiteSpace(priorSn))
+                            return new EnrollmentResult
+                            {
+                                Status = (int)EndEntityStatus.FAILED,
+                                StatusMessage =
+                                    "Renew/Reissue requires ProductParameters['PriorCertSN'] (hex serial number)."
+                            };
+
+                        string priorRequestId;
+                        try
                         {
-                            Status = (int)EndEntityStatus.FAILED,
-                            StatusMessage = $"Could not resolve PriorCertSN to request id: {ex.Message}"
-                        };
+                            priorRequestId = await _certificateDataReader
+                                .GetRequestIDBySerialNumber(priorSn)
+                                .ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            return new EnrollmentResult
+                            {
+                                Status = (int)EndEntityStatus.FAILED,
+                                StatusMessage = $"Could not resolve PriorCertSN to request id: {ex.Message}"
+                            };
+                        }
+
+                        var expiration = _certificateDataReader.GetExpirationDateByRequestId(priorRequestId);
+                        var isRenewal = expiration.HasValue && expiration.Value.ToUniversalTime() <= DateTime.UtcNow;
+
+                        var msg = isRenewal ? "Certificate Renewed" : "Certificate Reissued";
+                        var token = BuildIdempotencyToken(isRenewal ? "renew" : "reissue", priorRequestId, csr);
+
+                        // Still "IssueCertificate" under the hood; PCA doesn't have first-class renew/reissue.
+                        return await IssueAndFetchAsync(
+                                csr,
+                                productInfo.ProductID,
+                                days,
+                                msg,
+                                // Optional: stable-ish idempotency (helps avoid duplicates if caller retries quickly)
+                                token)
+                            .ConfigureAwait(false);
                     }
-
-                    var expiration = _certificateDataReader.GetExpirationDateByRequestId(priorRequestId);
-                    var isRenewal = expiration.HasValue && expiration.Value.ToUniversalTime() <= DateTime.UtcNow;
-
-                    var msg = isRenewal ? "Certificate Renewed" : "Certificate Reissued";
-                    var token = BuildIdempotencyToken(isRenewal ? "renew" : "reissue", priorRequestId, csr);
-
-                    // Still "IssueCertificate" under the hood; PCA doesn't have first-class renew/reissue.
-                    return await IssueAndFetchAsync(
-                            csr,
-                            productInfo.ProductID,
-                            days,
-                            msg,
-                            // Optional: stable-ish idempotency (helps avoid duplicates if caller retries quickly)
-                            token)
-                        .ConfigureAwait(false);
-                }
 
                 default:
                     return new EnrollmentResult
@@ -652,7 +685,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 DefaultValue = "",
                 Type = "String"
             },
-            [Constants.Enabled] = new ()
+            [Constants.Enabled] = new()
             {
                 Comments = "Flag to Enable or Disable gateway functionality. Disabling is primarily used to allow creation of the CA prior to configuration information being available.",
                 Hidden = false,
