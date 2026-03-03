@@ -60,8 +60,9 @@ public sealed class AwsPcaClient : IAwsPcaClient
             throw new ArgumentNullException(nameof(configProvider),
                 "Config provider and CAConnectionData are required.");
 
+
         var enabled = bool.Parse(GetRequiredString(configProvider, "Enabled"));
-        if (enabled)
+        if (!enabled)
         {
             Logger.LogWarning($"The CA is currently in the Disabled state. It must be Enabled to perform operations. Skipping config validation and AWS PCA Client creation...");
             Logger.MethodExit();
