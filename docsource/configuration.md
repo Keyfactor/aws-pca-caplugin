@@ -5,11 +5,18 @@ This integration allows for the Synchronization, Enrollment, and Revocation of c
 ## Requirements
 
 This integration is tested and confirmed as working for Anygateway REST 24.4 and above. Notice: Keyfactor Anygateway REST 24.4 requires the use of .Net 8.
+## Gateway Registration
+Download the **PCA root certificate** from AWS and have it ready to import into the Gateway **in `.pem` format**.
 
 ## Authentication (Access Key + Secret)
 
 The CAPlugin currently supports **one** authentication method: **AWS Access Key ID + Secret Access Key**.  
 **OAuth** and **Default SDK authentication** will be enabled in later updates. There is functionality present via the **Keyfactor AWS Authentication** library, but these alternate methods are currently ***untested***.
+
+### Known Issues
+
+At present, a fresh install of Keyfactor Command 24.4 used in conjuction with Keyfactor Gateway REST 25.4.0.0 is confirmed as working.  A fresh install of Command 25.3 used with REST 25.4.0.0 is also confirmed as working.
+Latest version of Command 25.4 may run into issues, investigation into compatibility issues is ongoing. 
 
 ### What you need ready
 
@@ -19,7 +26,7 @@ Before configuring the CAPlugin, have the following prepared:
 - **Access Key ID** (example format: `AKIAIOSFODNN7EXAMPLE`)
 - **Secret Access Key** (example format: `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`)
 
-#### 2) A target IAM Role the connector will run as (recommended)
+#### 2) A target IAM Role the Gateway will run as (recommended)
 Example:
 - `arn:aws:iam::123456789012:role/Keyfactor-AnyGateway-AcmPcaRole`
 
@@ -190,7 +197,49 @@ The following examples are intended as **copy/adapt templates**.
 }
 ```
 
-## Gateway Registration
+---
 
-TODO Gateway Registration is a required section
+## Signing algorithm selection (ACM PCA)
+
+The connector supports an optional **template / product parameter** named `SigningAlgorithm` that controls the **certificate signature algorithm**
+passed to AWS ACM PCA `IssueCertificate`.
+
+- If **not set**, the plugin will **auto-select** a compatible default based on the CA `KeyAlgorithm` returned by
+  `DescribeCertificateAuthority`.
+- If **set**, the plugin validates the value and **rejects incompatible combinations** before calling AWS.
+
+### Where to configure
+
+Set `SigningAlgorithm` on the **AnyGateway template** (product parameters), alongside `LifetimeDays`.
+
+### Valid `SigningAlgorithm` values (AWS PCA)
+
+- RSA family: `SHA256WITHRSA`, `SHA384WITHRSA`, `SHA512WITHRSA`
+- ECDSA family: `SHA256WITHECDSA`, `SHA384WITHECDSA`, `SHA512WITHECDSA`
+- SM2: `SM3WITHSM2`
+- ML-DSA (post-quantum): `ML_DSA_44`, `ML_DSA_65`, `ML_DSA_87`
+
+### Allowed CA key algorithm <-> signing algorithm combinations
+
+The CA key algorithm is the PCA CA **KeyAlgorithm** (not the subject key in the CSR). The signing algorithm must match the CA key family.
+
+| CA KeyAlgorithm | Allowed SigningAlgorithm values |
+|---|---|
+| `RSA_2048`, `RSA_3072`, `RSA_4096` | `SHA256WITHRSA`, `SHA384WITHRSA`, `SHA512WITHRSA` |
+| `EC_prime256v1`, `EC_secp384r1`, `EC_secp521r1` | `SHA256WITHECDSA`, `SHA384WITHECDSA`, `SHA512WITHECDSA` |
+| `SM2` | `SM3WITHSM2` |
+| `ML_DSA_44` | `ML_DSA_44` |
+| `ML_DSA_65` | `ML_DSA_65` |
+| `ML_DSA_87` | `ML_DSA_87` |
+
+### Auto-selection defaults
+
+When `SigningAlgorithm` is omitted, the plugin selects:
+
+- RSA CAs -> `SHA256WITHRSA`
+- EC P-256 -> `SHA256WITHECDSA`
+- EC P-384 -> `SHA384WITHECDSA`
+- EC P-521 -> `SHA512WITHECDSA`
+- SM2 -> `SM3WITHSM2`
+- ML-DSA -> exact-match (`ML_DSA_44/65/87`)
 
