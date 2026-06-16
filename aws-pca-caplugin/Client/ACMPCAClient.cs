@@ -39,6 +39,7 @@ public sealed class AwsPcaClient : IAwsPcaClient
     private const string ENHANCED_KEY_USAGE_OID = "2.5.29.37";
     private const string SERVER_AUTH_OID = "1.3.6.1.5.5.7.3.1";
     private const string CLIENT_AUTH_OID = "1.3.6.1.5.5.7.3.2";
+    private const string CODE_SIGNING_OID = "1.3.6.1.5.5.7.3.3";
 
     private readonly SemaphoreSlim _caInfoLock = new(1, 1);
     private readonly AWSCredentials AwsCredentials;
@@ -59,7 +60,6 @@ public sealed class AwsPcaClient : IAwsPcaClient
         if (configProvider?.CAConnectionData == null)
             throw new ArgumentNullException(nameof(configProvider),
                 "Config provider and CAConnectionData are required.");
-
 
         var enabled = bool.Parse(GetRequiredString(configProvider, "Enabled"));
         if (!enabled)
@@ -145,12 +145,29 @@ public sealed class AwsPcaClient : IAwsPcaClient
             if (signingAlgoRes.Error != null)
                 return new IssueCertificateResponse { RegistrationError = signingAlgoRes.Error };
 
+            // Map the requested ProductId to its AWS PCA template ARN. Without this,
+            // PCA falls back to EndEntityCertificate/V1 and every cert gets the default
+            // Server+Client Auth EKU combination regardless of the selected product.
+            if (string.IsNullOrWhiteSpace(request.ProductId) ||
+                !Constants.TemplateARNs.TryGetValue(request.ProductId, out var templateArn))
+                return new IssueCertificateResponse
+                {
+                    RegistrationError = new RegistrationError
+                    {
+                        Description = string.IsNullOrWhiteSpace(request.ProductId)
+                            ? "ProductId is required to resolve the AWS PCA template ARN."
+                            : $"Unsupported ProductId '{request.ProductId}'. Supported: {string.Join(", ", Constants.TemplateARNs.Keys)}",
+                        ErrorCode = "InvalidRequest"
+                    }
+                };
+
             var signingAlgorithm = signingAlgoRes.Value!;
             var issueReq = new Amazon.ACMPCA.Model.IssueCertificateRequest
             {
                 CertificateAuthorityArn = CaArn,
                 Csr = new MemoryStream(Encoding.ASCII.GetBytes(csrBytes)),
                 SigningAlgorithm = signingAlgorithm,
+                TemplateArn = templateArn,
                 IdempotencyToken = request.IdempotencyToken ?? Guid.NewGuid().ToString("N"),
                 Validity = new Validity
                 {
@@ -554,14 +571,14 @@ public sealed class AwsPcaClient : IAwsPcaClient
 
     /// <summary>
     ///     Infers one of the supported template type keys:
-    ///     EndEntity, EndEntityClientAuth, EndEntityServerAuth.
+    ///     EndEntity, EndEntityClientAuth, EndEntityServerAuth, CodeSigning.
     ///     Returns "Unknown" if certificate parsing/inspection fails.
     /// </summary>
     public static string InferTemplateTypeKey(X509Certificate2 cert)
     {
         try
         {
-            bool server = false, client = false;
+            bool server = false, client = false, codeSigning = false;
 
             // Find EKU extension (do not rely on indexer throwing)
             var eku = cert.Extensions
@@ -574,8 +591,11 @@ public sealed class AwsPcaClient : IAwsPcaClient
                         server = true;
                     else if (string.Equals(usage.Value, CLIENT_AUTH_OID, StringComparison.Ordinal))
                         client = true;
+                    else if (string.Equals(usage.Value, CODE_SIGNING_OID, StringComparison.Ordinal))
+                        codeSigning = true;
 
             // Map to your known keys
+            if (codeSigning && !server && !client) return "CodeSigning";
             if (server && !client) return "EndEntityServerAuth";
             if (client && !server) return "EndEntityClientAuth";
 

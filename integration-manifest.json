@@ -95,7 +95,8 @@
             "product_ids": [
                 "EndEntity",
                 "EndEntityClientAuth",
-                "EndEntityServerAuth"
+                "EndEntityServerAuth",
+                "CodeSigning"
             ]
         }
     }
