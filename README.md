@@ -1,5 +1,5 @@
 <h1 align="center" style="border-bottom: none">
-    AWSPCA CA  Gateway AnyCA Gateway REST Plugin
+    AWSPCA CAPlugin AnyCA Gateway REST Plugin
 </h1>
 
 <p align="center">
@@ -38,10 +38,10 @@ This integration allows for the Synchronization, Enrollment, and Revocation of c
 
 ## Compatibility
 
-The AWSPCA CA  Gateway AnyCA Gateway REST plugin is compatible with the Keyfactor AnyCA Gateway REST 25.4.0 and later.
+The AWSPCA CAPlugin AnyCA Gateway REST plugin is compatible with the Keyfactor AnyCA Gateway REST 25.4.0 and later.
 
 ## Support
-The AWSPCA CA  Gateway AnyCA Gateway REST plugin is supported by Keyfactor for Keyfactor customers. If you have a support issue, please open a support ticket with your Keyfactor representative. If you have a support issue, please open a support ticket via the Keyfactor Support Portal at https://support.keyfactor.com. 
+The AWSPCA CAPlugin AnyCA Gateway REST plugin is supported by Keyfactor for Keyfactor customers. If you have a support issue, please open a support ticket with your Keyfactor representative. If you have a support issue, please open a support ticket via the Keyfactor Support Portal at https://support.keyfactor.com. 
 
 > To report a problem or suggest a new feature, use the **[Issues](../../issues)** tab. If you want to contribute actual bug fixes or proposed enhancements, use the **[Pull requests](../../pulls)** tab.
 
@@ -53,7 +53,7 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
 
 1. Install the AnyCA Gateway REST per the [official Keyfactor documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/InstallIntroduction.htm).
 
-2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CA  Gateway AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin/releases/latest) from GitHub.
+2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CAPlugin AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin/releases/latest) from GitHub.
 
 3. Copy the unzipped directory (usually called `net6.0` or `net8.0`) to the Extensions directory:
 
@@ -64,11 +64,11 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
     Program Files\Keyfactor\AnyCA Gateway\AnyGatewayREST\net8.0\Extensions
     ```
 
-    > The directory containing the AWSPCA CA  Gateway AnyCA Gateway REST plugin DLLs (`net6.0` or `net8.0`) can be named anything, as long as it is unique within the `Extensions` directory.
+    > The directory containing the AWSPCA CAPlugin AnyCA Gateway REST plugin DLLs (`net6.0` or `net8.0`) can be named anything, as long as it is unique within the `Extensions` directory.
 
 4. Restart the AnyCA Gateway REST service.
 
-5. Navigate to the AnyCA Gateway REST portal and verify that the Gateway recognizes the AWSPCA CA  Gateway plugin by hovering over the ⓘ symbol to the right of the Gateway on the top left of the portal.
+5. Navigate to the AnyCA Gateway REST portal and verify that the Gateway recognizes the AWSPCA CAPlugin plugin by hovering over the ⓘ symbol to the right of the Gateway on the top left of the portal.
 
 ## Configuration
 
@@ -100,7 +100,7 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
         * **ExternalId** - Optional sts:ExternalId to supply on AssumeRole calls. 
         * **Enabled** - Flag to Enable or Disable gateway functionality. Disabling is primarily used to allow creation of the CA prior to configuration information being available. 
 
-2. Define [Certificate Profiles](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCP-Gateway.htm) and [Certificate Templates](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCA-Gateway.htm) for the Certificate Authority as required. One Certificate Profile must be defined per Certificate Template. It's recommended that each Certificate Profile be named after the Product ID. The AWSPCA CA  Gateway plugin supports the following product IDs:
+2. Define [Certificate Profiles](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCP-Gateway.htm) and [Certificate Templates](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/AddCA-Gateway.htm) for the Certificate Authority as required. One Certificate Profile must be defined per Certificate Template. It's recommended that each Certificate Profile be named after the Product ID. The AWSPCA CAPlugin plugin supports the following product IDs:
 
     * **EndEntity**
     * **EndEntityClientAuth**
