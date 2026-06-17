@@ -13,11 +13,6 @@ Download the **PCA root certificate** from AWS and have it ready to import into 
 The CAPlugin currently supports **one** authentication method: **AWS Access Key ID + Secret Access Key**.  
 **OAuth** and **Default SDK authentication** will be enabled in later updates. There is functionality present via the **Keyfactor AWS Authentication** library, but these alternate methods are currently ***untested***.
 
-### Known Issues
-
-At present, a fresh install of Keyfactor Command 24.4 used in conjuction with Keyfactor Gateway REST 25.4.0.0 is confirmed as working.  A fresh install of Command 25.3 used with REST 25.4.0.0 is also confirmed as working.
-Latest version of Command 25.4 may run into issues, investigation into compatibility issues is ongoing. 
-
 ### What you need ready
 
 Before configuring the CAPlugin, have the following prepared:
