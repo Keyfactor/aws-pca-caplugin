@@ -415,6 +415,30 @@ public class AWSPCACAPlugin : IAnyCAPlugin
             switch (enrollmentType)
             {
                 case EnrollmentType.New:
+                {
+                    return await IssueAndFetchAsync(
+                            csr,
+                            productInfo.ProductID,
+                            days,
+                            signingAlgorithm,
+                            "Certificate Issued")
+                        .ConfigureAwait(false);
+                }
+
+                case EnrollmentType.RenewOrReissue:
+                {
+                    if (productInfo.ProductParameters == null ||
+                        !TryGetProductParam(productInfo.ProductParameters, "PriorCertSN", out var priorSn) ||
+                        string.IsNullOrWhiteSpace(priorSn))
+                        return new EnrollmentResult
+                        {
+                            Status = (int)EndEntityStatus.FAILED,
+                            StatusMessage =
+                                "Renew/Reissue requires ProductParameters['PriorCertSN'] (hex serial number)."
+                        };
+
+                    string priorRequestId;
+                    try
                     {
                         return await IssueAndFetchAsync(
                                 csr,
@@ -685,7 +709,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 DefaultValue = "",
                 Type = "String"
             },
-            [Constants.Enabled] = new()
+            [Constants.Enabled] = new ()
             {
                 Comments = "Flag to Enable or Disable gateway functionality. Disabling is primarily used to allow creation of the CA prior to configuration information being available.",
                 Hidden = false,
