@@ -22,6 +22,10 @@ public static class Constants
         {
             "EndEntityServerAuth",
             "arn:aws:acm-pca:::template/EndEntityServerAuthCertificate/V1"
+        },
+        {
+            "CodeSigning",
+            "arn:aws:acm-pca:::template/CodeSigningCertificate/V1"
         }
     };
 
