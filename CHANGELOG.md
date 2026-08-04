@@ -1,3 +1,7 @@
+v.1.0.2
+
+- Added support for all auth methods currently supported by the Keyfactor AWS library. 
+
 v.1.0.1
 
 - Added support for the AWS Code Signing Template

@@ -12,12 +12,18 @@
 	</PropertyGroup>
 
 
-	<Target Name="CustomPostBuild" AfterTargets="PostBuildEvent">
-		<Exec Condition="'$(Configuration)'=='DebugAndPush'" Command="PowerShell -ExecutionPolicy Bypass -File &quot;C:\Users\mkachkaev\source\scripts\SyncScriptAWS_GT.ps1&quot;&#xA;" />
+	<!--
+		DebugAndPush post-build: runs a local push/deploy script after building. The script path is
+		supplied per-developer via the $(PushScript) property (set it in AWSPCACAPlugin.csproj.user,
+		which is gitignored) or as an MSBuild/CI property, so no personal path is committed. When
+		$(PushScript) is unset or the file is missing (e.g. a fresh clone, or another developer's
+		machine), the step is skipped and the build still succeeds. See AWSPCACAPlugin.csproj.user.example.
+	-->
+	<Target Name="CustomPostBuild" AfterTargets="PostBuildEvent"
+			Condition="'$(Configuration)'=='DebugAndPush' and '$(PushScript)'!='' and Exists('$(PushScript)')">
+		<Exec Command="PowerShell -ExecutionPolicy Bypass -File &quot;$(PushScript)&quot;" />
 	</Target>
 
-
-	
 
 	<ItemGroup>
 		<None Update="manifest.json">
@@ -26,17 +32,15 @@
 	</ItemGroup>
 
 
-
 	<ItemGroup>
-		<PackageReference Include="Keyfactor.AnyGateway.IAnyCAPlugin" Version="3.2.0" />
+		<PackageReference Include="Keyfactor.AnyGateway.IAnyCAPlugin" Version="3.3.0" />
 		<PackageReference Include="Keyfactor.PKI" Version="8.3.1" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-		<PackageReference Include="AWSSDK.ACMPCA" Version="4.0.4.9" />
-		<PackageReference Include="AWSSDK.S3" Version="4.0.25" />
+		<PackageReference Include="AWSSDK.ACMPCA" Version="4.0.100.7" />
+		<PackageReference Include="AWSSDK.S3" Version="4.0.101.6" />
 		<PackageReference Include="Keyfactor.Common" Version="2.11.0" />
 		<PackageReference Include="Keyfactor.Extensions.Aws.Auth" Version="0.5.2" />
 		<PackageReference Include="Keyfactor.Logging" Version="1.3.0" />
-	</ItemGroup>		
-
+	</ItemGroup>
 
 </Project>

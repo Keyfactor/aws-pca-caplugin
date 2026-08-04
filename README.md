@@ -5,9 +5,9 @@
 <p align="center">
   <!-- Badges -->
 <img src="https://img.shields.io/badge/integration_status-pilot-3D1973?style=flat-square" alt="Integration Status: pilot" />
-<a href="https://github.com/Keyfactor/aws-pca-caplugin/releases"><img src="https://img.shields.io/github/v/release/Keyfactor/aws-pca-caplugin?style=flat-square" alt="Release" /></a>
-<img src="https://img.shields.io/github/issues/Keyfactor/aws-pca-caplugin?style=flat-square" alt="Issues" />
-<img src="https://img.shields.io/github/downloads/Keyfactor/aws-pca-caplugin/total?style=flat-square&label=downloads&color=28B905" alt="GitHub Downloads (all assets, all releases)" />
+<a href="https://github.com/Keyfactor/aws-pca-caplugin-dev/releases"><img src="https://img.shields.io/github/v/release/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Release" /></a>
+<img src="https://img.shields.io/github/issues/Keyfactor/aws-pca-caplugin-dev?style=flat-square" alt="Issues" />
+<img src="https://img.shields.io/github/downloads/Keyfactor/aws-pca-caplugin-dev/total?style=flat-square&label=downloads&color=28B905" alt="GitHub Downloads (all assets, all releases)" />
 </p>
 
 <p align="center">
@@ -53,7 +53,7 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
 
 1. Install the AnyCA Gateway REST per the [official Keyfactor documentation](https://software.keyfactor.com/Guides/AnyCAGatewayREST/Content/AnyCAGatewayREST/InstallIntroduction.htm).
 
-2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CAPlugin AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin/releases/latest) from GitHub.
+2. On the server hosting the AnyCA Gateway REST, download and unzip the latest [AWSPCA CAPlugin AnyCA Gateway REST plugin](https://github.com/Keyfactor/aws-pca-caplugin-dev/releases/latest) from GitHub.
 
 3. Copy the unzipped directory (usually called `net6.0` or `net8.0`) to the Extensions directory:
 
@@ -115,10 +115,9 @@ This integration is tested and confirmed as working for Anygateway REST 24.4 and
     * **SigningAlgorithm** - Required: AWS ACM PCA certificate signature algorithm to use when issuing certificates. Value is an AWS PCA SigningAlgorithm enum name (case-insensitive), e.g. SHA256WITHRSA, SHA384WITHRSA, SHA256WITHECDSA. If omitted, the plugin selects a default compatible with the CA key algorithm. 
 
 
-## Authentication (Access Key + Secret)
+## Authentication
 
-The CAPlugin currently supports **one** authentication method: **AWS Access Key ID + Secret Access Key**.  
-**OAuth** and **Default SDK authentication** will be enabled in later updates. There is functionality present via the **Keyfactor AWS Authentication** library, but these alternate methods are currently ***untested***.
+The CAPlugin authenticates to AWS through the **Keyfactor AWS Authentication** library, which supports several methods. All of the methods below are supported and validated against ACM PCA. Choose **one** method per CA connection by setting the corresponding toggles/fields in **CAConnection**.
 
 ### Known Issues
 
@@ -127,83 +126,116 @@ Latest version of Command 25.4 may run into issues, investigation into compatibi
 
 ### What you need ready
 
-Before configuring the CAPlugin, have the following prepared:
+> **Key concept — the *destination* identity.** Whichever identity the plugin ends up operating as — the assumed `RoleArn`, or the *originating* identity when no Assume Role is performed — is the **destination**, and it is what must hold the ACM PCA + S3 audit-report permissions (see [Example IAM policies](#example-iam-policies-for-the-destination-identity)). For every Assume-Role method the **originating** identity additionally needs `sts:AssumeRole` on the target role, and the target role's **trust policy** must allow that originating principal (see [Example trust policies](#example-trust-policies)).
 
-#### 1) IAMUserAccessKey and IAMUserAccessSecret
-- **Access Key ID** (example format: `AKIAIOSFODNN7EXAMPLE`)
-- **Secret Access Key** (example format: `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`)
+### Common requirements (all methods)
 
-#### 2) A target IAM Role the Gateway will run as (recommended)
-Example:
-- `arn:aws:iam::123456789012:role/Keyfactor-AnyGateway-AcmPcaRole`
+- **Region** — the AWS region for service endpoints; must match your **ACM Private CA** region (e.g. `us-east-2`).
+- **CAArn** — the Certificate Authority ARN, e.g. `arn:aws:acm-pca:<region>:<account-id>:certificate-authority/<ca-uuid>`.
+- **S3Bucket** — bucket name (not ARN) for ACM PCA audit reports, e.g. `keyfactor-acmpca-audit-reports`. The destination identity needs `s3:ListBucket`/`s3:GetBucketLocation` on the bucket and `s3:GetObject`/`s3:PutObject` on `<bucket>/*`, and ACM PCA itself must be allowed to write to it (see [Example policy for bucket](#example-policy-for-bucket)).
+- **PCA Root Cert** — download the PCA root certificate from AWS in `.pem` format to upload under **Gateway Registration**.
+- **Scan interval** — ACM PCA limits audit-report generation to roughly **once per 30 minutes** per CA. Set the CA's `ServiceSettings` full-scan interval to **≥ 30 minutes** to avoid throttling.
 
-**Role expectations:**
-- The role must have permissions for:
-  - **ACM PCA operations** (Issue/Get/Revoke/Describe + CA certificate chain retrieval)
-  - **Audit report creation & status polling** (Create/Describe audit reports)
-  - **S3 bucket access** to read/write audit report objects
+### Method configuration
 
-#### 3) Permissions on the assumed role
-The assumed role must have permissions for the AWS services the Gateway needs. This typically includes:
-- `acm-pca:*` actions required for enrollment + revocation workflows
-- Audit report actions (`acm-pca:CreateCertificateAuthorityAuditReport`, `acm-pca:DescribeCertificateAuthorityAuditReport`)
-- S3 bucket and object access for the audit report destination bucket
+For every method, also set the common `Region`, `CAArn`, and `S3Bucket`, and upload the Root CA under **Gateway Registration**. Set all auth toggles you are **not** using to `false`.
 
-**See the example IAM policies below in this README section**
+#### IAM User (Access Key + Secret)
+- `UseIAM` = `true`
+- `IAMUserAccessKey` (e.g. `AKIAIOSFODNN7EXAMPLE`), `IAMUserAccessSecret` (e.g. `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`)
+- `RoleArn` — the destination role to assume (e.g. `arn:aws:iam::123456789012:role/Keyfactor-AnyGateway-AcmPcaRole`)
 
-#### 4) Region
-Know the **AWS region** the connector should use (for service endpoints), e.g.:
-- `us-east-1`
+**AWS setup:** the IAM user needs `sts:AssumeRole` on `RoleArn`; `RoleArn`'s trust policy must allow the IAM user (see [Assume-Role trust](#example-trust-policies)); `RoleArn` holds the [PCA + S3 permissions](#example-iam-policies-for-the-destination-identity).
 
-> Region must match the region of your **ACM Private CA**.
+#### IAM User + ExternalId
+As **IAM User**, plus set `ExternalId`. The target role's trust policy must include a matching `sts:ExternalId` condition (see [Assume-Role with ExternalId](#example-trust-policies)). Use this when the role owner requires a shared secret to prevent the confused-deputy problem.
 
-#### 5) CA ARN
-Have the **Certificate Authority ARN** for the PCA you want to integrate with.
+#### Default SDK (no assume)
+- `UseDefaultSdkAuth` = `true`, `DefaultSdkAssumeRole` = `false` (`RoleArn` is ignored)
 
-Example format:
-- `arn:aws:acm-pca:<region>:<account-id>:certificate-authority/<ca-uuid>`
+The Gateway host's **ambient AWS identity** is the destination and must hold the PCA + S3 permissions directly. The AWS SDK resolves this from, in order: `AWS_*` environment variables, the shared credentials file `[default]` profile, or an EC2 instance role. On a Windows AnyCA Gateway host the service runs as `NETWORK SERVICE`, so provide credentials via the machine-level env var `AWS_SHARED_CREDENTIALS_FILE` (pointing at a credentials file readable by the service) or the service account's `%USERPROFILE%\.aws\credentials`.
 
-Example:
-- `arn:aws:acm-pca:us-east-2:123456789012:certificate-authority/11111111-2222-3333-4444-555555555555`
+#### Default SDK + Assume Role
+- `UseDefaultSdkAuth` = `true`, `DefaultSdkAssumeRole` = `true`, `RoleArn` = destination role
 
-#### 6) S3 Bucket
-Choose an S3 bucket to store / retrieve ACM PCA audit reports.
+The ambient identity (resolved as above) is the **originating** account and performs `sts:AssumeRole` into `RoleArn`. The ambient identity needs `sts:AssumeRole`; `RoleArn`'s trust allows it and holds the PCA + S3 permissions.
 
-You should have:
-- **Bucket name** (example: `keyfactor-acmpca-audit-reports`, not the full bucket ARN!) 
+#### Credential Profile (± Assume Role)
+Prefix the `RoleArn` with a `[profile-name]`, e.g. `[myprofile]arn:aws:iam::123456789012:role/Keyfactor-AnyGateway-AcmPcaRole`, and set `UseDefaultSdkAuth` = `true`. The named profile must exist in the shared AWS credentials file **on the Gateway host** (same location rules as Default SDK above).
 
+- **No assume** (`DefaultSdkAssumeRole` = `false`): the profile identity is the destination and needs the PCA + S3 permissions directly.
+- **With assume** (`DefaultSdkAssumeRole` = `true`): the profile is the originating identity and assumes `RoleArn` (which holds the permissions and trusts the profile identity).
 
-> The role needs `s3:ListBucket` / `s3:GetBucketLocation` at the bucket ARN, and `s3:GetObject` / `s3:PutObject` on the object ARN pattern.
+#### OAuth (OIDC federation)
+- `UseOAuth` = `true`
+- `OAuthClientId`, `OAuthClientSecret`, `OAuthUrl` (the token endpoint), `OAuthScope`, `OAuthGrantType` (`client_credentials`)
+- `RoleArn` = destination role (federated web-identity role)
 
-#### 7) PCA Root Cert
-Download the **PCA root certificate** from AWS and have it ready to import into the Gateway **in `.pem` format**.
+The plugin requests an OAuth token (`client_credentials` grant, client id/secret sent as an HTTP **Basic** `Authorization` header) and calls `sts:AssumeRoleWithWebIdentity` on `RoleArn`.
 
-### Enabling all this in the Gateway Configuration Portal
+**AWS setup:** create an IAM **OIDC identity provider** for the token issuer, and set `RoleArn`'s trust policy to allow `sts:AssumeRoleWithWebIdentity` for that provider with the appropriate `aud` (and optionally `sub`) conditions (see [OAuth/web-identity trust](#example-trust-policies)).
 
-#### 1) Register the Gateway CA and upload the Root CA certificate
-1. Navigate to **Gateway Registration**.
-2. Upload the **Root CA Certificate** you downloaded earlier (PEM).
+> OAuth notes: the OIDC provider must accept the client id/secret as a **Basic auth header** (not POST body); **DPoP must be disabled** on the app; and the token lifetime must be **≤ 12 hours** — STS `AssumeRoleWithWebIdentity` caps `DurationSeconds` at 43200, and the plugin derives the session duration from the token's `expires_in`.
 
-#### 2) Configure the CA connection settings
-1. Navigate to **CAConnection**.
-2. Populate:
-   - `RoleArn` (example: `arn:aws:iam::123456789012:role/Keyfactor-AnyGateway-AcmPcaRole`)
-   - `Region` (example: `us-east-2`)
-   - `CAArn` (example: `arn:aws:acm-pca:us-east-2:123456789012:certificate-authority/11111111-2222-3333-4444-555555555555`)
-   - `S3Bucket` (example: `keyfactor-acmpca-audit-reports`)
-   - `IAMUserAccessKey` (example: `AKIA...`)
-   - `IAMUserAccessSecret` (example: `wJalrXU...`)
+### Setting up AWS Authentication (Examples)
 
-3. Set these auth toggles:
-   - `UseDefaultSdkAuth` = `false`
-   - `UseOAuth` = `false`
-   - `UseIAM` = `true`
+> [!NOTE]
+> Several different options are offered for authenticating with AWS.
+> Documentation for how these options work is maintained in the [aws-auth-library](https://github.com/Keyfactor/aws-auth-library) repository.
+
+The following examples show potential configurations for Roles in AWS with different selected authentication methods. Your configuration steps may differ depending on the specific requirements of your use case. In every case the **destination identity** must hold the ACM Private CA + S3 audit-report permissions (see [Example IAM policies](#example-iam-policies-for-the-destination-identity)), and every Assume-Role method additionally requires the *originating* identity to have `sts:AssumeRole` and the target role's **trust policy** to allow that principal (see [Example trust policies](#example-trust-policies)).
+
+<details>
+<summary>Host instance credentials using Default SDK and Assume Role</summary>
+
+Select the `Use Default SDK Auth` option (`UseDefaultSdkAuth=true`) to have the plugin load the Gateway host's ambient AWS credentials. If the Gateway runs on an EC2 instance, this is the IAM Role assigned to the instance; on a non-EC2 Windows host it is whatever the service account resolves from `AWS_SHARED_CREDENTIALS_FILE` or `%USERPROFILE%\.aws\credentials` (the AnyCA Gateway service runs as `NETWORK SERVICE`).
+
+If that ambient identity is itself the Destination account identity to use with ACM Private CA, no additional Role needs to be configured. If it is only to be used initially and a separate `RoleArn` is designated as the Destination account, also select `Assume new Role using Default SDK Auth` (`DefaultSdkAssumeRole=true`).
+
+**AWS Setup**
+_Note: to use instance credentials, the CAPlugin's Gateway host must be running inside an EC2 instance._
+1. Assign or note the existing IAM Role assigned to the EC2 instance (or the credentials configured for the service account).
+2. If Assume Role is used, ensure a [Trust Relationship](https://docs.aws.amazon.com/directoryservice/latest/admin-guide/edit_trust.html) is set up on the Destination role that allows the ambient identity to assume it.
+3. Verify the permissions match the requirements for accessing ACM Private CA (see [Example IAM policies](#example-iam-policies-for-the-destination-identity)).
+
+</details>
+
+<details>
+<summary>OAuth OIDC Identity Provider (Okta example)</summary>
+
+Select the `Use OAuth` option (`UseOAuth=true`) for a CA connection to use an OAuth Identity Provider, and supply `OAuthClientId`, `OAuthClientSecret`, `OAuthUrl` (token endpoint), `OAuthScope`, and `OAuthGrantType` (`client_credentials`).
+
+**AWS Setup**
+1. A 3rd party [Identity Provider](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html) — an IAM **OIDC identity provider** for the token issuer — needs to be set up in AWS.
+2. An [AWS Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html) (the `RoleArn`) needs to be created for use with your Identity Provider.
+3. Ensure the [Trust Relationship](https://docs.aws.amazon.com/directoryservice/latest/admin-guide/edit_trust.html) is set up for that role with the Identity Provider, allowing `sts:AssumeRoleWithWebIdentity` with the appropriate `aud` (and optionally `sub`) conditions (see [OAuth / web-identity trust](#example-trust-policies)).
+4. Verify the permissions match the requirements for accessing ACM Private CA.
+
+**OKTA Setup**
+1. Ensure your Authorization Server is set up in Okta.
+2. Ensure the appropriate scopes are set up in Okta.
+3. Set up an Okta App (client-credentials / API Services type). The app must send the client id/secret as a **Basic auth header** (not POST body), have **DPoP disabled**, and issue tokens with a lifetime **≤ 12 hours** (STS caps `DurationSeconds` at 43200).
+
+</details>
+
+<details>
+<summary>IAM User credentials to Assume Role</summary>
+
+Select the `Use IAM` option (`UseIAM=true`) for a CA connection to use an IAM User credential, supplying `IAMUserAccessKey` and `IAMUserAccessSecret`.
+
+**AWS Setup**
+1. An [AWS Role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html) to Assume with your IAM User needs to be created (set as `RoleArn`).
+2. Ensure a [Trust Relationship](https://docs.aws.amazon.com/directoryservice/latest/admin-guide/edit_trust.html) is set up for that role that allows the IAM User (see [Assume-Role trust](#example-trust-policies)). If using the ExternalId modifier, add a matching `sts:ExternalId` condition.
+3. AWS does not support programmatic access for AWS SSO accounts. The account used here must be a standard AWS IAM User with an Access Key credential type.
+4. Verify the permissions match the requirements for accessing ACM Private CA (see [Example IAM policies](#example-iam-policies-for-the-destination-identity)).
+
+</details>
 
 ---
 
-### Example IAM policies for the assumed role
+### Example IAM policies for the destination identity
 
-The following examples are intended as **copy/adapt templates**. 
+These permissions belong on the **destination identity** (the assumed `RoleArn`, or the ambient/profile identity when no Assume Role is performed). The following examples are intended as **copy/adapt templates**. 
 
 #### Example 1: Minimal PCA issuance/retrieval/revocation
 
@@ -276,6 +308,70 @@ The following examples are intended as **copy/adapt templates**.
   ]
 }
 ```
+---
+
+### Example trust policies
+
+Every Assume-Role method requires a **trust policy** on the destination role that allows the originating principal to assume it. (Default SDK *no-assume* and Credential Profile *no-assume* need no trust policy — the identity is used directly.)
+
+#### Assume Role — IAM User, Default SDK + Assume, or Credential Profile + Assume
+
+`<<ORIGINATING PRINCIPAL>>` is the IAM user ARN (IAM User method) or the ambient/profile identity ARN (Default SDK / Credential Profile + Assume).
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": "<<ORIGINATING PRINCIPAL ARN>>" },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+#### Assume Role with ExternalId
+
+Add a matching `sts:ExternalId` condition; the CAConnection `ExternalId` value must equal it.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": "<<ORIGINATING PRINCIPAL ARN>>" },
+      "Action": "sts:AssumeRole",
+      "Condition": { "StringEquals": { "sts:ExternalId": "<<your-external-id>>" } }
+    }
+  ]
+}
+```
+
+#### OAuth — web-identity trust
+
+`RoleArn` for the OAuth method must trust the OIDC provider you registered for your token issuer. Condition on the token `aud` (audience) and optionally `sub` (for `client_credentials`, `sub` is typically the client id).
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Federated": "arn:aws:iam::<account-id>:oidc-provider/<issuer-host>/<issuer-path>" },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "<issuer-host>/<issuer-path>:aud": "<<audience>>",
+          "<issuer-host>/<issuer-path>:sub": "<<client-id>>"
+        }
+      }
+    }
+  ]
+}
+```
+
 ---
 
 ### Example policy for bucket
