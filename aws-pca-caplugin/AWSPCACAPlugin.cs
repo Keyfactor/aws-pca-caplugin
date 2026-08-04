@@ -95,8 +95,8 @@ public class AWSPCACAPlugin : IAnyCAPlugin
         CancellationToken cancelToken)
     {
         Logger.MethodEntry();
-        Logger.LogTrace(
-            $"Synchronize started. fullSync={fullSync}, lastSync={lastSync?.ToUniversalTime().ToString("O") ?? "null"}");
+        Logger.LogInformation(
+            $"AWS PCA Synchronize started. fullSync={fullSync}, lastSync={lastSync?.ToUniversalTime().ToString("O") ?? "(none)"}");
 
         try
         {
@@ -105,7 +105,8 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 throw new Exception($"AWS audit report failed: {report.RegistrationError.Description}");
 
             var items = report?.Result ?? new List<ACMPCACertificate>();
-            Logger.LogDebug($"Sync found {items.Count} audit records.");
+            Logger.LogInformation($"AWS PCA Synchronize: retrieved {items.Count} audit record(s) from the CA.");
+            int emitted = 0;
 
             foreach (var audit in items)
             {
@@ -252,6 +253,7 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                                 Status = (int)EndEntityStatus.INPROCESS,
                                 ProductID = certResp.CertificateType
                             }, cancelToken);
+                            emitted++;
 
                             continue;
                         }
@@ -294,9 +296,12 @@ public class AWSPCACAPlugin : IAnyCAPlugin
 
                 // Emit to buffer as AnyGateway expects.
                 blockingBuffer.Add(finalsubmit, cancelToken);
+                emitted++;
             }
 
             blockingBuffer.CompleteAdding();
+            Logger.LogInformation(
+                $"AWS PCA Synchronize complete: scanned {items.Count} audit record(s), emitted {emitted} certificate(s) to Keyfactor (added/updated/status-changed). fullSync={fullSync}.");
             Logger.MethodExit();
         }
         catch (Exception e)
@@ -341,14 +346,14 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 return (int)EndEntityStatus.FAILED;
             }
 
-            // Prefer the normalized numeric status from the client response if present.
-            if (resp != null && resp.Status > 0)
-                return resp.Status;
-
-            // Fallback if Status wasn't implemented on response
-            return resp?.RevokeSuccess == true
-                ? (int)EndEntityStatus.REVOKED
-                : (int)EndEntityStatus.FAILED;
+            // Prefer the normalized numeric status from the client response if present;
+            // otherwise fall back to RevokeSuccess.
+            var revokedStatus = (resp != null && resp.Status > 0)
+                ? resp.Status
+                : (resp?.RevokeSuccess == true ? (int)EndEntityStatus.REVOKED : (int)EndEntityStatus.FAILED);
+            Logger.LogInformation(
+                $"AWS PCA Revoke completed: serial={serial}, reason={awsReason}, resultStatus={revokedStatus}.");
+            return revokedStatus;
         }
         catch (Exception ex)
         {
@@ -440,59 +445,35 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                     string priorRequestId;
                     try
                     {
-                        return await IssueAndFetchAsync(
-                                csr,
-                                productInfo.ProductID,
-                                days,
-                                signingAlgorithm,
-                                "Certificate Issued")
+                        priorRequestId = await _certificateDataReader
+                            .GetRequestIDBySerialNumber(priorSn)
                             .ConfigureAwait(false);
                     }
-
-                case EnrollmentType.RenewOrReissue:
+                    catch (Exception ex)
                     {
-                        if (productInfo.ProductParameters == null ||
-                            !TryGetProductParam(productInfo.ProductParameters, "PriorCertSN", out var priorSn) ||
-                            string.IsNullOrWhiteSpace(priorSn))
-                            return new EnrollmentResult
-                            {
-                                Status = (int)EndEntityStatus.FAILED,
-                                StatusMessage =
-                                    "Renew/Reissue requires ProductParameters['PriorCertSN'] (hex serial number)."
-                            };
-
-                        string priorRequestId;
-                        try
+                        return new EnrollmentResult
                         {
-                            priorRequestId = await _certificateDataReader
-                                .GetRequestIDBySerialNumber(priorSn)
-                                .ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            return new EnrollmentResult
-                            {
-                                Status = (int)EndEntityStatus.FAILED,
-                                StatusMessage = $"Could not resolve PriorCertSN to request id: {ex.Message}"
-                            };
-                        }
-
-                        var expiration = _certificateDataReader.GetExpirationDateByRequestId(priorRequestId);
-                        var isRenewal = expiration.HasValue && expiration.Value.ToUniversalTime() <= DateTime.UtcNow;
-
-                        var msg = isRenewal ? "Certificate Renewed" : "Certificate Reissued";
-                        var token = BuildIdempotencyToken(isRenewal ? "renew" : "reissue", priorRequestId, csr);
-
-                        // Still "IssueCertificate" under the hood; PCA doesn't have first-class renew/reissue.
-                        return await IssueAndFetchAsync(
-                                csr,
-                                productInfo.ProductID,
-                                days,
-                                msg,
-                                // Optional: stable-ish idempotency (helps avoid duplicates if caller retries quickly)
-                                token)
-                            .ConfigureAwait(false);
+                            Status = (int)EndEntityStatus.FAILED,
+                            StatusMessage = $"Could not resolve PriorCertSN to request id: {ex.Message}"
+                        };
                     }
+
+                    var expiration = _certificateDataReader.GetExpirationDateByRequestId(priorRequestId);
+                    var isRenewal = expiration.HasValue && expiration.Value.ToUniversalTime() <= DateTime.UtcNow;
+
+                    var msg = isRenewal ? "Certificate Renewed" : "Certificate Reissued";
+                    var token = BuildIdempotencyToken(isRenewal ? "renew" : "reissue", priorRequestId, csr);
+
+                    // Still "IssueCertificate" under the hood; PCA doesn't have first-class renew/reissue.
+                    return await IssueAndFetchAsync(
+                            csr,
+                            productInfo.ProductID,
+                            days,
+                            msg,
+                            // Optional: stable-ish idempotency (helps avoid duplicates if caller retries quickly)
+                            token)
+                        .ConfigureAwait(false);
+                }
 
                 default:
                     return new EnrollmentResult
@@ -529,8 +510,9 @@ public class AWSPCACAPlugin : IAnyCAPlugin
         }
         try
         {
-            Logger.LogInformation("Ping request received");
+            Logger.LogInformation("AWS PCA Ping request received; contacting AWS...");
             await AwsClient.PingAsync().ConfigureAwait(false);
+            Logger.LogInformation("AWS PCA Ping succeeded (AWS reachable).");
         }
         catch (Exception e)
         {
@@ -769,16 +751,23 @@ public class AWSPCACAPlugin : IAnyCAPlugin
             IdempotencyToken = idempotencyToken ?? Guid.NewGuid().ToString("N")
         };
 
+        Logger.LogInformation(
+            $"AWS PCA IssueCertificate requested: productId={productId}, validityDays={validityDays}, signingAlgorithm={signingAlgorithm ?? "(auto)"}.");
+
         var issueResp = await AwsClient.SubmitIssueCertificateAsync(issueReq).ConfigureAwait(false);
 
         if (issueResp?.RegistrationError != null ||
             issueResp?.Result == null ||
             string.IsNullOrWhiteSpace(issueResp.Result.CertificateArn))
+        {
+            var failMsg = issueResp?.RegistrationError?.Description ?? "AWS PCA IssueCertificate failed.";
+            Logger.LogError($"AWS PCA IssueCertificate failed (productId={productId}): {failMsg}");
             return new EnrollmentResult
             {
                 Status = (int)EndEntityStatus.FAILED,
-                StatusMessage = issueResp?.RegistrationError?.Description ?? "AWS PCA IssueCertificate failed."
+                StatusMessage = failMsg
             };
+        }
 
         var certArn = issueResp.Result.CertificateArn;
         var caRequestId = issueResp.Result.CertificateId ?? SafeRequestIdFromArn(certArn) ?? certArn;
@@ -811,6 +800,8 @@ public class AWSPCACAPlugin : IAnyCAPlugin
                 StatusMessage = "AWS PCA returned an empty certificate."
             };
 
+        Logger.LogInformation(
+            $"AWS PCA enrollment succeeded ({statusMessageOnSuccess}): productId={productId}, caRequestId={caRequestId}, certificateArn={certArn}, validityDays={validityDays}, status={certResp.Status}.");
         return new EnrollmentResult
         {
             CARequestID = caRequestId,
