@@ -453,14 +453,37 @@ public sealed class AwsPcaClient : IAwsPcaClient
     {
         var s3 = await GetOrCreateS3ClientAsync(cancellationToken).ConfigureAwait(false);
 
-        using var response = await s3.GetObjectAsync(new GetObjectRequest
+        // ACM PCA audit-report generation is asynchronous: CreateCertificateAuthorityAuditReport
+        // returns the S3 key before AWS has finished writing the object. Downloading immediately
+        // races the report generation and fails with NoSuchKey ("The specified key does not
+        // exist"). Poll for the object with backoff until it appears (or we time out).
+        var deadline = DateTime.UtcNow.AddMinutes(3);
+        var delay = TimeSpan.FromSeconds(2);
+        while (true)
         {
-            BucketName = bucket,
-            Key = key
-        }, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var response = await s3.GetObjectAsync(new GetObjectRequest
+                {
+                    BucketName = bucket,
+                    Key = key
+                }, cancellationToken).ConfigureAwait(false);
 
-        using var reader = new StreamReader(response.ResponseStream);
-        return await reader.ReadToEndAsync().ConfigureAwait(false);
+                using var reader = new StreamReader(response.ResponseStream);
+                return await reader.ReadToEndAsync().ConfigureAwait(false);
+            }
+            catch (AmazonS3Exception ex) when (
+                (ex.ErrorCode == "NoSuchKey" || ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+                && DateTime.UtcNow < deadline)
+            {
+                Logger.LogDebug(
+                    $"Audit report not yet available in S3 (bucket={bucket}, key={key}); " +
+                    $"retrying in {delay.TotalSeconds:0}s.");
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 1.5, 15));
+            }
+        }
     }
 
     private async Task<IAmazonS3> GetOrCreateS3ClientAsync(CancellationToken cancellationToken)

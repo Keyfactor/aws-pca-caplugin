@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Template for a local, developer-specific MSBuild override.
+
+  The "DebugAndPush" build configuration runs a post-build push/deploy script whose path is NOT
+  committed to the repo. To use it:
+
+    1. Copy this file to  AWSPCACAPlugin.csproj.user  (same folder).
+       (*.user is gitignored, so your personal path stays out of source control.)
+    2. Set <PushScript> below to the full path of your local push script.
+    3. Build the "DebugAndPush" configuration in Visual Studio (or `dotnet build -c DebugAndPush`);
+       Visual Studio auto-imports the .user file, so the script runs after the build.
+
+  If <PushScript> is unset or the file doesn't exist, the DebugAndPush build simply skips the push
+  step and still succeeds. You can also supply the value without this file, e.g.:
+       dotnet build -c DebugAndPush -p:PushScript="C:\path\to\your\push.ps1"
+-->
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PushScript>C:\path\to\your\push-script.ps1</PushScript>
+  </PropertyGroup>
+</Project>
